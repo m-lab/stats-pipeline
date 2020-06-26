@@ -1,0 +1,61 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>View Map</title>
+  <meta name="description" content="Test">
+  <meta name="author" content="jlchu">
+
+  <link rel="stylesheet" href="css/styles.css?v=1.0">
+
+  <script src='https://api.mapbox.com/mapbox-gl-js/v1.11.0/mapbox-gl.js'></script>
+  <link href='https://api.mapbox.com/mapbox-gl-js/v1.11.0/mapbox-gl.css' rel='stylesheet' />
+
+</head>
+
+<body>
+  <div id='map' style='width: 400px; height: 300px;'></div>
+  <script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoiamxjaHUiLCJhIjoiY2tidmZlbjVxMDVqcTM0bnh3dmV6Z2I1ciJ9.8mpjbvKHG4IQ2d0NtKlloA';
+    var map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/streets-v11'
+    });
+    
+    map.on('load', function() {
+        // Add Mapillary sequence layer.
+        // https://www.mapillary.com/developer/tiles-documentation/#sequence-layer
+        map.addSource('MLAB', {
+            'type': 'vector',
+            'tiles': [
+        'https://maptiles.measurementlab.net/us/county/ndt/week/{z}/{x}/{y}.pbf'
+            ],
+            'minzoom': 6,
+            'maxzoom': 14
+        });
+        map.addLayer(
+            {
+                'id': 'MLAB',
+                'type': 'line',
+                'source': 'MLAB',
+                'source-layer': 'mapillary-sequences',
+                'layout': {
+                    'line-cap': 'round',
+                    'line-join': 'round'
+                },
+                'paint': {
+                    'line-opacity': 0.6,
+                    'line-color': 'rgb(53, 175, 109)',
+                    'line-width': 2
+                }
+            },
+            'waterway-label'
+        );
+    });
+  </script>
+
+  <script src="js/scripts.js"></script>
+</body>
+</html>
