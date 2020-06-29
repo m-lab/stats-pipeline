@@ -1,0 +1,14 @@
+
+*.csv
+*.csvt
+archive/mlab_census_tracts_2014_2018_0430.mbtiles
+notes/ogr_commands.md
+data/mlab_stats_by_congress_district.json
+data/fcc477_ct_json.json
+archive/ross-nn.html
+*.mbtiles-journal
+code-snippets.html
+data/USBB_05282019_ct_mlab_fcc_2014_2017_2.json
+data/USBB_05282019_county_fcc_mlab_2014_2017_2.json
+*.json
+mbtiles/*

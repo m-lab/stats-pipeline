@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8' />
+    <title>USBB Map: Vector Tile</title>
+    <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+    <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.1/mapbox-gl.js'></script>
+	<link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.1/mapbox-gl.css' rel='stylesheet' />
+	<link href="main.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+
+<div id='map'></div>
+
+<div class='map-overlay top'>
+	<div class='map-overlay-inner'>
+		<h2>MLAB BroadBand Mapping</h2>
+		<label for="measurement">Data <abbr title="Choose the measurement to show on the map.">?</abbr></label>
+		<select id="measurement" name="measurement">
+		</select>
+		<div style="width:100%;">
+		<details>
+			<summary>Sources & Data Notes:</summary>
+				<strong><a href="https://www.fcc.gov/general/broadband-deployment-data-fcc-form-477">FCC 477</a></strong> data represents the advertized speeds as reported by the ISPs for a given census tract, if the ISP could service 1 household in that census tract. To provide a unified value for the census tract, we have taken all of the advertized speeds available, and shown the median value based on the speeds reported from the ISPs. <br /><br />
+				<strong><a href="https://www.measurementlab.net/tests/ndt/">M-Lab NDT</a></strong> data are Network Diagnostic Tool (NDT) measurements gathered from internet users running NDT against M-Lab servers. The data are aggregated into the reporting time periods for the FCC 477 data.
+		</details>
+		</div>
+		<label for="geo">Area <abbr title="Choose the detail level of the places on the map.">?</abbr></label> 
+		<select id="geo" name="geo">
+		</select>
+		<label for="slider">Time Period <abbr title="Choose the time period to show on the map.">?</abbr></label>
+		<label id='time_period'></label>
+		<input id='slider' type='range' />
+		<label for="state_select">Zoom to State <abbr title="Center the map on a specific state.">?</abbr></label>
+		<select id="state_select" name="state_select">
+		</select>
+
+		<div class='session'>
+		  <h3>Legend</h3>
+		  <div id='legend' class='row colors'>
+		  </div>
+		  <div id="legendlabel" class='row labels'>
+		    <div class='label'>0</div>
+		    <div class='label'>0</div>
+		    <div class='label'>0</div>
+		    <div class='label'>0</div>
+		    <div class='label'>0</div>
+		    <div class='label'>0</div>
+		  </div>
+		  <div id='noresultlegend' class='noresultrow'>
+		  </div>
+		  <div id="noresultlabel" class='row labels'>
+			  <div class='label'>No tests available in time period</div>
+		  </div>
+		</div>
+	</div>
+</div>
+
+<script type="text/javascript" src="main.js"></script>
+
+</body>
+</html>
