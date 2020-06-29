@@ -1,0 +1,144 @@
+
+body { margin:0; padding:0; }
+#map { position:absolute; top:0; bottom:0; width:100%; }
+
+.map-overlay {
+font: 14px/20px Arial;
+position: absolute;
+top: 0;
+left: 0;
+padding: 10px;
+}
+ 
+.map-overlay, .map-overlay .citation {
+background-color: #fff;
+box-shadow: unset;
+border-radius: 0px;
+padding: 10px;
+margin-bottom: 10px;
+}
+
+.map-overlay-inner {
+    border-radius: 0px;
+    box-shadow: unset;
+    padding: 15px;
+}
+
+.map-overlay .map-overlay-inner input {
+    display: block;
+} 
+.map-overlay h2 {
+line-height: 24px;
+display: block;
+margin: 0 0 10px;
+}
+ 
+.map-overlay .legend .bar {
+height: 10px;
+width: 100%;
+background: linear-gradient(to right, #FCA107, #7F3121);
+}
+ 
+.map-overlay input {
+background-color: transparent;
+display: block;
+width: auto;
+position: relative;
+margin: 0;
+cursor: ew-resize;
+}
+
+.map-overlay input#slider {
+    width: 100%;
+}
+
+.map-overlay label {
+    display: block;
+}
+
+input[type=radio] {
+    display: inline-block;
+}
+
+.session {
+  margin-bottom: 20px;
+}
+
+.row {
+  height: 10px;
+  width: 100%;
+}
+
+.noresultrow {
+    height: 10px;
+    width: 13%;
+    margin-top: 20px;
+    background: #808080;
+}
+
+.colors {
+  background: #FFFFFF;
+  margin-bottom: 5px;
+}
+
+#legendlabel {
+    display: flex;
+    /* flex-direction: rows; */
+}
+
+.label {
+  display: inline-block;
+  flex: 1;
+  text-align: center;
+  margin-top: 5px;
+  font-weight: bold;
+}
+#console {
+  position: absolute;
+  width: 240px;
+  margin: 10px;
+  padding: 10px 20px;
+  background-color: white;
+}
+
+.popup-box {
+    border-radius: 0px;
+    box-shadow: unset;
+}
+.report {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    grid-column-gap: 0.5em;
+}
+.report-header {
+    font-weight: bold;
+    text-align: center;
+    border-bottom: 1px solid black;
+}
+.report-value {
+    text-align: end;
+    border-bottom: 1px dashed black;
+}
+.report-date {
+    text-align: left;
+}
+.report-key {
+    text-align: end;
+}
+
+.citation{
+    max-width: 20em;
+    max-height: 15em;
+    overflow: scroll;
+}
+
+details {
+    padding-left: 2em;
+    padding-right: 2em;
+    max-width: 18em;
+}
+
+summary {
+    position: relative;
+    left: -2em;
+}
