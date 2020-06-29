@@ -2,113 +2,83 @@
 
 set -eux
 
-# TABLE="maptiles_temp.temp"
-PUB_LOC="fcc-maptiles"
+FRACTION=${1?Please enter desired fraction of FCC data.}
+PUB_LOC="fcc-maptiles/june19"
+GCS_STORAGE="fcc-june19-shards"
+# Define paths based on FRACTION queried.
+PATHSTRING="${FRACTION#.}"
 
-# declare -a query_jobs=( "" \
-#   )
-# 
-# for val in ${query_jobs[@]}; do
-#   RESULT_NAME="$val"
-#   QUERY="${RESULT_NAME}.sql"
-#   GCS_STORAGE="${RESULT_NAME}_temp"
+gcloud config set project mlab-interns-2020
 
-  # Run bq query with generous row limit. Write results to temp table created above.
-  # By default, bq fetches the query results to display in the shell, consuming a lot of memory.
-  # Use --nosync to "fire-and-forget", then implement our own wait loop to defer the next command
-  # until the table is populated.
-  gcloud config set project mlab-interns-2020
+# Run bq query WITH NO ROW LIMIT. Instead, FRACTION determines the fraction of
+# rows returned via random sampling.
 
-#   JOB_ID=$(bq --nosync --project_id measurement-lab query \
-#     --allow_large_results --destination_table "mlab_statistics.${RESULT_NAME}" \
-#     --replace --use_legacy_sql=false --max_rows=4000000 \
-#     "$(cat "queries/${QUERY}")")
-# 
-#   JOB_ID="${JOB_ID#Successfully started query }"
-# 
-#   until [ DONE == $(bq --format json show --job "${JOB_ID}" | jq -r '.status.state') ]
-#   do
-#     sleep 30
-#   done
+# Don't understand the following comment from legacy script:
+# By default, bq fetches the query results to display in the shell, consuming a lot of memory.
+# Use --nosync to "fire-and-forget", then implement our own wait loop to defer the next command
+# until the table is populated.
 
-  # # create a temprary GCS Storage Bucket
-  # gsutil mb gs://${GCS_STORAGE}
+# Join FCC data with public geo information.
+# We retain the tables in BQ, so in theory this does not need to be rerun if the
+# given FRACTION has already been queried for.
+bq --project_id mlab-interns-2020 query \
+  --allow_large_results \
+  --destination_table "mlab_pipeline.fcc_june19_with_geo_${PATHSTRING}" \
+  --replace \
+  --use_legacy_sql=false \
+  "$(cat "../queries/join_geo_sampling.sql" | sed "s/FRACTION/${FRACTION}/")"
+#   "$(cat "../queries/join_geo.sql")"
 
-  # # Generate CSV files; expected to include geometry info in WKT format.
-  # bq extract --destination_format CSV "mlab_statistics.${RESULT_NAME}" \
-  #     gs://${GCS_STORAGE}/${RESULT_NAME}_*.csv
+# create a (temporary?) GCS Storage Bucket
+gsutil mb gs://${GCS_STORAGE}-${PATHSTRING}
 
-  # # Fetch the CSV files that were just exported.
-  # gsutil -m cp gs://${GCS_STORAGE}/${RESULT_NAME}_*.csv ./
+# Generate CSV files; expected to include geometry info in WKT format.
+bq extract --destination_format CSV "mlab_pipeline.fcc_june19_with_geo_${PATHSTRING}" \
+  gs://${GCS_STORAGE}-${PATHSTRING}/*.csv
 
-  # # Cleanup the files on GCS because we don't need them there anymore.
-  # gsutil rm -r gs://${GCS_STORAGE}
+# Create directories if needed.
+[ -d ../shards ] || mkdir ../shards
+[ -d ../shards/${PATHSTRING} ] || mkdir ../shards/${PATHSTRING}
+[ -d ../maptiles ] || mkdir ../maptiles
+[ -d ../maptiles/${PATHSTRING} ] || mkdir ../maptiles/${PATHSTRING}
 
-  # # ogr2ogr requires a schema file to know which csv column represents
-  # # the geometry. We pass all filenames to the inference script, but
-  # # it only reads the first one, since the schema should be consistent
-  # # for all of them.
-  # scripts/infer_csvt_schema.sh ${RESULT_NAME}_*.csv > schema.csvt
+# Fetch the CSV files that were just exported.
+gsutil -m cp gs://${GCS_STORAGE}-${PATHSTRING}/*.csv ../shards/${PATHSTRING}
 
-#   # Use xargs to convert all the csv files to geojson individually, in
-#   # parallel. We will aggregate them in the next step.  See csv_to_geojson
-#   # script for ogr2ogr args.
-#   echo ${RESULT_NAME}_*.csv | xargs -n1 -P4 scripts/csv_to_geojson.sh 
+# Clean up the files on GCS because we don't need them there anymore.
+# gsutil rm -r gs://${GCS_STORAGE}-${PATHSTRING}
 
-  # Truncate CSV. FPAT is regex parsing the csv input (either pure comma
-  # separation, or surrounded by double quotes), OFS is the output delimiter, 
-  # and the main expression takes the tenth entry (Block Code) and replaces it with its first
-  # 12 characters (Block Group Code) for all rows after the first. 
-  awk -vFPAT='([^,]*)|("[^"]+")' -vOFS=, 'NR>1{$"10"=substr($"10",1,12)}1' ${}.csv > ${}.csv
+# Use xargs to convert all the csv files to geojson individually, in
+# parallel. We will aggregate them in the next step. See csv_to_geojson
+# script for ogr2ogr args.
+echo ../shards/${PATHSTRING}/*.csv | xargs -n1 -P4 ./csv_to_geojson.sh 
 
-  # Convert shape files to geojson
-  ogr2ogr -f GeoJSON ${}.geojson ${}.shp
+# # Let tippecanoe read all the geojson files into one layer.
+# if [ SOME CONDITION ]; then 
+#   sudo /usr/local/bin/tippecanoe -e ../maptiles/${PATHSTRING} -f -l fcc-june19 \
+#     ../shards/${PATHSTRING}/*.geojson -Z4 -z10 -d8 -D8 -m4 \
+#     --simplification=10 \
+#     --detect-shared-borders \
+#     --drop-densest-as-needed \
+#     --coalesce-densest-as-needed \
+#     --no-tile-compression
+# else 
+sudo /usr/local/bin/tippecanoe -e ../maptiles/${PATHSTRING} -f -l fcc-june19 \
+  ../shards/${PATHSTRING}/*.geojson -zg \
+  --simplification=10 \
+  --detect-shared-borders \
+  --drop-densest-as-needed \
+  --coalesce-densest-as-needed \
+  --no-tile-compression
+# fi
 
-  # Join with (truncated) CSV
-  ogr2ogr -f GeoJSON california_retry.geojson truncated.csv -sql "SELECT * FROM trun
-cated c JOIN 'california_shape.geojson'.cb_2018_06_bg_500k s ON c.BlockCode = s.GEOID"
+# Upload generated tile set to cloud storage publishing location
+gsutil -m -h 'Cache-Control:private, max-age=0, no-transform' \
+  cp -r ../maptiles/${PATHSTRING}/* gs://${PUB_LOC}/${PATHSTRING}/
 
-  # Let tippecanoe read all the geojson files into one layer.
-  if [ $RESULT_NAME = "us_zipcode"]; then 
-    tippecanoe -e ./maptiles/${RESULT_NAME} -f -l ${RESULT_NAME} \
-      *.geojson -Z4 -z10 -d8 -D8 -m4 \
-      --simplification=10 \
-      --detect-shared-borders \
-      --drop-densest-as-needed \
-      --coalesce-densest-as-needed \
-      --no-tile-compression
-  else 
-    tippecanoe -e ./maptiles/${RESULT_NAME} -f -l ${RESULT_NAME} \
-      *.geojson -zg \
-      --simplification=10 \
-      --detect-shared-borders \
-      --drop-densest-as-needed \
-      --coalesce-densest-as-needed \
-      --no-tile-compression
-  fi
+# # Upload csv source data
+# gsutil -m -h 'Cache-Control:private, max-age=0, no-transform' \
+#   cp -r ./${RESULT_NAME}_*.csv gs://${PUB_LOC}/${PATHSTRING}/csv/
 
-  # Define the GCS path based on the RESULT NAME.
-  PATHSTRING="$(echo ${RESULT_NAME//_//})"
-
-  # # Switch projects
-  # gcloud config set project mlab-oti
-
-  # Upload generated tile set to cloud storage publishing location
-  gsutil -m -h 'Cache-Control:private, max-age=0, no-transform' \
-    cp -r ./maptiles/${RESULT_NAME}/* gs://${PUB_LOC}/${PATHSTRING}/
-
-  # Upload csv source data
-  gsutil -m -h 'Cache-Control:private, max-age=0, no-transform' \
-    cp -r ./${RESULT_NAME}_*.csv gs://${PUB_LOC}/${PATHSTRING}/csv/
-
-  # Cleanup local files 
-  rm -r schema.csvt ${RESULT_NAME}_* maptiles/*
-
-  # gsutil -m -h 'Cache-Control:private, max-age=0, no-transform' \
-  # cp -r ./maptiles/example.html gs://${PUB_LOC}/${RESULT_NAME}/index.html
-
-  # maptiles.mlab-sandbox.measurementlab.net
-  # NOTE: if the html and tiles are served from different domains we'll need to
-  # apply a CORS policy to GCS.
-
-# done
+# Cleanup local files 
+sudo rm -rf ../shards/${PATHSTRING}/* ../maptiles/${PATHSTRING}/*
