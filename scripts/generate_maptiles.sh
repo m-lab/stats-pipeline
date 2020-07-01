@@ -3,10 +3,12 @@
 set -eux
 
 FRACTION=${1?Please enter desired fraction of FCC data.}
+QUERYFILE=${2?Please enter one of ../queries/(concise)_join_geo_sampling.sql.}
 PUB_LOC="fcc-maptiles/june19"
 GCS_STORAGE="fcc-june19-shards"
 # Define paths based on FRACTION queried.
 PATHSTRING="${FRACTION#.}"
+PATHSTRING=$([[ ${QUERYFILE} == *"concise"* ]] && echo "${PATHSTRING}concise" || echo "${PATHSTRING}")
 
 gcloud config set project mlab-interns-2020
 
@@ -26,7 +28,7 @@ bq --project_id mlab-interns-2020 query \
   --destination_table "mlab_pipeline.fcc_june19_with_geo_${PATHSTRING}" \
   --replace \
   --use_legacy_sql=false \
-  "$(cat "../queries/join_geo_sampling.sql" | sed "s/FRACTION/${FRACTION}/")"
+  "$(cat "${QUERYFILE}" | sed "s/FRACTION/${FRACTION}/")"
 #   "$(cat "../queries/join_geo.sql")"
 
 # create a (temporary?) GCS Storage Bucket
