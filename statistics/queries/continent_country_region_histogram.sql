@@ -65,7 +65,7 @@ dl_stats_perday AS (
     MIN(download_MIN) AS download_MIN,
     APPROX_QUANTILES(download_Q25, 100) [SAFE_ORDINAL(25)] AS download_Q25,
     APPROX_QUANTILES(download_MED, 100) [SAFE_ORDINAL(50)] AS download_MED,
-    AVG(download_AVG) AS download_AVG,
+    AVG(download_MED) AS download_AVG,
     APPROX_QUANTILES(download_Q75, 100) [SAFE_ORDINAL(75)] AS download_Q75,
     MAX(download_MAX) AS download_MAX
   FROM
@@ -262,7 +262,7 @@ ul_stats_perday AS (
     MIN(upload_MIN) AS upload_MIN,
     APPROX_QUANTILES(upload_Q25, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
     APPROX_QUANTILES(upload_MED, 100) [SAFE_ORDINAL(50)] AS upload_MED,
-    AVG(upload_AVG) AS upload_AVG,
+    AVG(upload_MED) AS upload_AVG,
     APPROX_QUANTILES(upload_Q75, 100) [SAFE_ORDINAL(75)] AS upload_Q75,
     MAX(upload_MAX) AS upload_MAX
   FROM
