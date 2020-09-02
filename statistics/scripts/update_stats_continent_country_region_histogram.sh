@@ -1,98 +1,39 @@
 #!/bin/bash
 set -eux
 
-PROJECT="measurement-lab"
+PROJECT="mlab-sandbox"
 USERNAME="critzo"
-PUB_LOC="api.measurementlab.net"
+PUB_LOC="test-critzo-statistics"
 
 # Initially set the project to measurement-lab.
-gcloud config set project measurement-lab
+gcloud config set project mlab-sandbox
 
 declare -a query_jobs=("continent_country_region_histogram")
 
+
+startday=2020-01-01
+endday=2020-01-01
+
 #########################
-# Set date parameters for this run.  
-# Two options: - Check the exising table for the last date in the table
-#              - Set specific start & end dates
-#
-#   Comment out the option you don't want to use
-
-### option 1
-#today=($(TZ=GMT date +"%Y-%m-%d"))
-#sixmonths=$(TZ=GMT date -I -d "$today - 6 month")
-
-# Get the last date in the appropriate stats table from the last run.
-#JOB_ID0=$(bq --format=json --nosync --project_id "${PROJECT}" query \
-#  "SELECT test_date FROM \`measurement-lab.mlab_statistics.continent_country_region_histogram\` WHERE test_date >= \"${sixmonths}\" ORDER BY test_date DESC LIMIT 1") > lastdate.json
-
-#JOB_ID0="${JOB_ID0#Successfully started query }"
-
-#until [ DONE == $(bq --format json show --job "${JOB_ID0}" | jq -r '.status.state') ]
-#do
-#  sleep 30
-#done
-
-#lastday=($(jq .[].test_date lastdate.json))
-
-# Set startday to -2 days from last date.
-#   This ensures we've got all data from that day, as previous runs may have missed 
-#   tests that hadn't been pushed or were reprocessed since the last time.
-#
-#startday=$(TZ=GMT date -I -d "$lastday - 2 day")
-
-# Set end day to -4 days from today. 
-#   This ensures we're processing days where ETL has likely published most test data already.
-#
-#endday=$(TZ=GMT date -I -d "$today - 4 day")
-
-## When running option 1, automatic date selection:
-#     - first we'll delete any data between startday and endday
-#     - this ensures we are reprocessing all recent days to account for test rows 
-#       that might have been added since the last run by pusher or re-processed by gardener
-
-#JOB_ID1=$(bq --nosync --project_id "${PROJECT}" query \
-#  --use_legacy_sql=false "DELETE FROM \`measurement-lab.mlab_statistics.continent_country_region_histogram\` WHERE test_date BETWEEN \"${startday}\" AND \"${endday}\"")
-
-#JOB_ID1="${JOB_ID1#Successfully started query }"
-
-#until [ DONE == $(bq --format json show --job "${JOB_ID1}" | jq -r '.status.state') ]
-#do
-#  sleep 30
-#done
-
-
-### option 2
-startday=2019-01-01
-endday=2019-12-31
-#########################
-
-# Set the start and end year so we can group output by year
-startarray=($(echo $startday | tr "-" "\n"))
-startyear=${startarray[0]}
-endarray=($(echo $endday | tr "-" "\n"))
-endyear=${endarray[0]}
-endyear=$((endyear+1))
-
-year_range=()
-year_range+=(${startyear})
-
-if [ "$startyear" != "$endyear" ]
-then 
-  while [ "$startyear" != "$endyear" ]; do
-    startyear=$((startyear+1))
-    year_range+=(${startyear})
-  done
-fi
+endday=$(TZ=GMT date -I -d "$endday + 1 day")
+yeararray=($(echo $startday | tr "-" "\n"))
+year=${yeararray[0]}
 
 for val in ${query_jobs[@]}; do
   RESULT_NAME="$val"
   QUERY="${RESULT_NAME}.sql"
-  QUALIFIED_TABLE="${PROJECT}:mlab_statistics.${RESULT_NAME}"
+  QUALIFIED_TABLE="${PROJECT}:test_critzo_statistics.${RESULT_NAME}"
+  QUALIFIED_TABLE_IN_QUERY="${PROJECT}.test_critzo_statistics.${RESULT_NAME}"
+  DATASET="test_critzo_statistics"
+  TEMP_TABLE="temp_continent_country_region_stats"
+  TEMP_STATS="${PROJECT}:${DATASET}.${TEMP_TABLE}"
 
   # Run bq query with generous row limit. Write results to temp table created above.
   # By default, bq fetches the query results to display in the shell, consuming a lot of memory.
   # Use --nosync to "fire-and-forget", then implement our own wait loop to defer the next command
   # until the table is populated.
+
+  # TODO: add a check to see if this table exists already, and create it if not.
 
   while [ "$startday" != "$endday" ]; do
     JOB_ID=$(bq --nosync --project_id "${PROJECT}" query \
@@ -113,9 +54,7 @@ for val in ${query_jobs[@]}; do
   # Automate stats and outputs by continent, country, region, etc. using query params.
   #   Get all combinations of continent, country, and region codes & save to a local csv.
 
-## TODO: need to output daily counts by geo by YEAR. 
-##       probably should make /YYYY/ the final GCS path.
-  declare -a location_combos_query=("get_continent_country_region_codes")
+  declare -a location_combos_query=("get_continent_country_region_codes_sample")
 
   for v in ${location_combos_query[@]}; do
     RESULT2_NAME="$v"
@@ -123,64 +62,55 @@ for val in ${query_jobs[@]}; do
 
     JOB_ID2=$(bq --format=csv --project_id "${PROJECT}" query \
     --use_legacy_sql=false --max_rows=4000000 \
-    "$(cat "queries/${QUERY2}")" > continent_country_region_codes.csv ) 
+    "$(cat "queries/${QUERY2}")" > continent_country_region_codes.csv )
   done
 
   # bq exports csvs with a header. remove the header.
   sed -i '1d' continent_country_region_codes.csv
 
   # Make a temporary GCS bucket to store results.
-  gsutil mb gs://temp_stats_continent_country_region
+  gsutil mb gs://${USERNAME}_temp_stats_continent_country_region
 
-  # Grab the stats generated in bulk above, by year
-  for year in "${year_range[@]}"; do
+  # Loop through the csv lines, using three values as query parameters for a series of queries.
+  while IFS=, read -r continent country region;
+  do
+    iso_region="$country-$region"
 
-    # Loop through the csv lines, using three values as query parameters for a series of queries.
-    while IFS=, read -r continent country region;
-    do  
-      iso_region="$country-$region"
+    JOB_ID3=$(bq --nosync query \
+    --use_legacy_sql=false \
+    --max_rows=4000000 \
+    --project_id "${PROJECT}" \
+    --allow_large_results --destination_table "${TEMP_STATS}" \
+    --replace "SELECT * FROM ${QUALIFIED_TABLE_IN_QUERY} WHERE continent_code = \"${continent}\" AND country_code = \"${country}\" AND ISO3166_2region1 = \"${iso_region}\" ORDER BY test_date, continent_code, country_code, country_name, ISO3166_2region1, bucket_min, bucket_max")
 
-      JOB_ID3=$(bq --nosync query \
-      --use_legacy_sql=false --max_rows=4000000 --allow_large_results \
-      --destination_table "mlab_statistics.temp_continent_country_region_stats" \
-      --replace "SELECT * FROM \`mlab_statistics.continent_country_region_histogram\` WHERE continent_code = \"${continent}\" AND country_code = \"${country}\" AND ISO3166_2region1 = \"${iso_region}\" ORDER BY test_date, continent_code, county_code, country_name, ISO3166_2region1, bucket_min, bucket_max, frac, samples")
+    JOB_ID3="${JOB_ID3#Successfully started query }"
 
-      JOB_ID3="${JOB_ID3#Successfully started query }"
+    until [ DONE == $(bq --format json show --job "${JOB_ID3}" | jq -r '.status.state') ]
+    do
+      sleep 30
+    done
 
-      until [ DONE == $(bq --format json show --job "${JOB_ID3}" | jq -r '.status.state') ]
-      do
-        sleep 30
-      done
+    # Extract the rows to JSON and/or other output formats
+    bq extract --destination_format NEWLINE_DELIMITED_JSON \
+      ${QUALIFIED_TABLE} \
+      gs://${USERNAME}_temp_stats_continent_country_region/${continent}/${country}/${region}/${year}/histogram_daily_stats.json
 
-      # Extract the rows to JSON and/or other output formats      
-      bq extract --destination_format NEWLINE_DELIMITED_JSON \
-        mlab_statistics.temp_continent_country_region_stats \
-        gs://temp_stats_continent_country_region/${continent}/${country}/${region}/${year}/histogram_daily_stats.json      
-
-    done < continent_country_region_codes.csv
-
-  done
+  done < continent_country_region_codes.csv
 
   # Copy the full list of generated stats from measurement-lab project temp GCS bucket
-  gsutil -m cp -r gs://temp_stats_continent_country_region/* ./tmp/
-
-  # Change to production project and copy generated stats to the public bucket.
-  gcloud config set project mlab-oti
+  gsutil -m cp -r gs://${USERNAME}_temp_stats_continent_country_region/* tmp/
 
   # Convert all new line json files to json array format
   find ./tmp/ -type f -exec sed -i '1s/^/[/; $!s/$/,/; $s/$/]/' {} +
 
   # Publish the json array files to public GCS bucket
-  gsutil -m cp -r ./tmp/* gs://${PUB_LOC}/
-
-  # Change back to the measurement-lab project for the next iteration.
-  gcloud config set project measurement-lab
+  gsutil -m cp -r tmp/* gs://${PUB_LOC}/
 
 done
 
-# Cleanup 
+# Cleanup
 ## Remove the temporary GCS bucket.
-gsutil rm -r gs://temp_stats_continent_country_region
+gsutil rm -r gs://${USERNAME}_temp_stats_continent_country_region
 
 ## Remove local copies.
 rm -r ./tmp/*
