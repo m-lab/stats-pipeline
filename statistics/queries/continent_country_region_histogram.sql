@@ -10,7 +10,9 @@ dl_per_location AS (
     a.MeanThroughputMbps AS mbps,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip
   FROM `measurement-lab.ndt.unified_downloads`
-  WHERE test_date = @startday
+  WHERE test_date BETWEEN @startday AND @endday
+  AND client.geo.region != ""
+  AND client.geo.region IS NOT NULL
 ),
 # Clean the initial set of results so we're only using those with good location values and valid IPs
 dl_per_location_cleaned AS (
@@ -195,7 +197,9 @@ ul_per_location AS (
     a.MeanThroughputMbps AS mbps,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip
   FROM `measurement-lab.ndt.unified_uploads`
-  WHERE test_date = @startday
+  WHERE test_date BETWEEN @startday AND @endday
+  AND client.geo.region != ""
+  AND client.geo.region IS NOT NULL
 ),
 # With good locations and valid IPs
 ul_per_location_cleaned AS (
