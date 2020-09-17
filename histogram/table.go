@@ -26,12 +26,11 @@ type Table struct {
 
 // NewTable returns a new Table with the specified destination table, query
 // and BQ client.
-func NewTable(name string, ds string, query string, client *bigquery.Client) *Table {
-	bqClient := bqiface.AdaptClient(client)
+func NewTable(name string, ds string, query string, client bqiface.Client) *Table {
 	return &Table{
-		Table:  bqClient.Dataset(ds).Table(name),
+		Table:  client.Dataset(ds).Table(name),
 		Query:  query,
-		Client: bqClient,
+		Client: client,
 	}
 }
 
@@ -49,8 +48,8 @@ func (t *Table) deleteRows(ctx context.Context, start, end time.Time) error {
 	q := &bytes.Buffer{}
 	err := tpl.Execute(q, map[string]string{
 		"Table": t.DatasetID() + "." + t.TableID(),
-		"Start": start.Format("2006-01-02"),
-		"End":   end.Format("2006-01-02"),
+		"Start": start.Format(dateFormat),
+		"End":   end.Format(dateFormat),
 	})
 	if err != nil {
 		return err
@@ -84,11 +83,11 @@ func (t *Table) UpdateHistogram(ctx context.Context, start, end time.Time) error
 	qc.Parameters = []bigquery.QueryParameter{
 		{
 			Name:  "startdate",
-			Value: start.Format("2006-01-02"),
+			Value: start.Format(dateFormat),
 		},
 		{
 			Name:  "enddate",
-			Value: end.Format("2006-01-02"),
+			Value: end.Format(dateFormat),
 		},
 	}
 	query := t.Client.Query(t.Query)
