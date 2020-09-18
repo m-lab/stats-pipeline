@@ -76,7 +76,8 @@ func main() {
 	}
 	defer client.Close()
 
-	t := histogram.NewTable(destTable, destDataset, statsQuery, client)
+	t := histogram.NewTable(destTable, destDataset, statsQuery,
+		bqiface.AdaptClient(client))
 	err = t.UpdateHistogram(mainCtx, startDate.UTC(), endDate.UTC())
 	rtx.Must(err, "Cannot update histogram table")
 

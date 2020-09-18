@@ -11,7 +11,10 @@ import (
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
 )
 
-const deleteRowsTpl = "DELETE FROM {{.Table}} WHERE test_date BETWEEN \"{{.Start}}\" AND \"{{.End}}\""
+const (
+	dateFormat    = "2006-01-02"
+	deleteRowsTpl = "DELETE FROM {{.Table}} WHERE test_date BETWEEN \"{{.Start}}\" AND \"{{.End}}\""
+)
 
 // Table represents a bigquery table containing histogram data.
 // It embeds bigquery.Table and extends it with an UpdateHistogram method.
