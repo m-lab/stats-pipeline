@@ -12,51 +12,21 @@ import (
 	"github.com/m-lab/go/rtx"
 )
 
-func TestNewTable(t *testing.T) {
-	table := NewTable("test_table", "dataset", "SELECT 1", &testClient{})
-	if table == nil {
-		t.Errorf("NewTable() returned nil.")
-	}
-}
-
-func TestTable_queryConfig(t *testing.T) {
-	testQuery := "SELECT 1"
-	table := NewTable("test", "dataset", "", &testClient{})
-	q := table.queryConfig(testQuery)
-	if q.Q != testQuery {
-		t.Errorf("queryConfig(): expected %s, got %s.", testQuery, q.Q)
-	}
-}
-
-type testClient struct {
+// ***** mockClient *****
+type mockClient struct {
 	bqiface.Client
 	queryReadMustFail bool
 	queryRunMustFail  bool
 	queries           []string
 }
 
-type testDataset struct {
-	bqiface.Dataset
-	name string
-}
-
-type testTable struct {
-	bqiface.Table
-	ds   string
-	name string
-}
-
-type testRowIterator struct {
-	bqiface.RowIterator
-}
-
-func (c *testClient) Dataset(name string) bqiface.Dataset {
-	return &testDataset{
+func (c *mockClient) Dataset(name string) bqiface.Dataset {
+	return &mockDataset{
 		name: name,
 	}
 }
 
-func (c *testClient) Query(query string) bqiface.Query {
+func (c *mockClient) Query(query string) bqiface.Query {
 	return &mockQuery{
 		client:       c,
 		q:            query,
@@ -65,25 +35,38 @@ func (c *testClient) Query(query string) bqiface.Query {
 	}
 }
 
-func (ds *testDataset) Table(name string) bqiface.Table {
-	return &testTable{
+// ***** mockDataset *****
+type mockDataset struct {
+	bqiface.Dataset
+	name string
+}
+
+func (ds *mockDataset) Table(name string) bqiface.Table {
+	return &mockTable{
 		ds:   ds.name,
 		name: name,
 	}
 }
 
-func (t *testTable) DatasetID() string {
+// ***** mockTable *****
+type mockTable struct {
+	bqiface.Table
+	ds   string
+	name string
+}
+
+func (t *mockTable) DatasetID() string {
 	return t.ds
 }
 
-func (t *testTable) TableID() string {
+func (t *mockTable) TableID() string {
 	return t.name
 }
 
 // ********** mockQuery **********
 type mockQuery struct {
 	bqiface.Query
-	client       *testClient
+	client       *mockClient
 	q            string
 	qc           bqiface.QueryConfig
 	readMustFail bool
@@ -105,14 +88,19 @@ func (q *mockQuery) Read(context.Context) (bqiface.RowIterator, error) {
 	}
 	// Store the query's content into the client so it can be checked later.
 	q.client.queries = append(q.client.queries, q.q)
-	return &testRowIterator{}, nil
+	return &mockRowIterator{}, nil
 }
 
 func (q *mockQuery) SetQueryConfig(qc bqiface.QueryConfig) {
 	q.qc = qc
 }
 
-// ***** testJob *****
+// ***** mockRowIterator *****
+type mockRowIterator struct {
+	bqiface.RowIterator
+}
+
+// ***** mockJob *****
 type mockJob struct {
 	bqiface.Job
 	waitMustFail bool
@@ -127,14 +115,31 @@ func (j *mockJob) Wait(context.Context) (*bigquery.JobStatus, error) {
 	}, nil
 }
 
+// ***** Tests *****
+func TestNewTable(t *testing.T) {
+	table := NewTable("test_table", "dataset", "SELECT 1", &mockClient{})
+	if table == nil {
+		t.Errorf("NewTable() returned nil.")
+	}
+}
+
+func TestTable_queryConfig(t *testing.T) {
+	testQuery := "SELECT 1"
+	table := NewTable("test", "dataset", "", &mockClient{})
+	q := table.queryConfig(testQuery)
+	if q.Q != testQuery {
+		t.Errorf("queryConfig(): expected %s, got %s.", testQuery, q.Q)
+	}
+}
+
 func TestTable_deleteRows(t *testing.T) {
-	table := NewTable("test", "dataset", "query", &testClient{})
+	table := NewTable("test", "dataset", "query", &mockClient{})
 	err := table.deleteRows(context.Background(), time.Now(), time.Now().Add(1*time.Minute))
 	if err != nil {
 		t.Errorf("deleteRows() returned err: %v", err)
 	}
 
-	table = NewTable("test", "dataset", "query", &testClient{
+	table = NewTable("test", "dataset", "query", &mockClient{
 		queryReadMustFail: true,
 	})
 	err = table.deleteRows(context.Background(), time.Now(), time.Now().Add(1*time.Minute))
@@ -151,14 +156,14 @@ func TestTable_UpdateHistogram(t *testing.T) {
 	tests := []struct {
 		name    string
 		query   string
-		client  *testClient
+		client  *mockClient
 		want    []string
 		wantErr bool
 	}{
 		{
 			name:   "ok",
 			query:  "histogram generation query",
-			client: &testClient{},
+			client: &mockClient{},
 			want: []string{
 				"DELETE FROM test_ds.test_table WHERE test_date BETWEEN \"2020-01-01\" AND \"2020-12-31\"",
 				"histogram generation query",
@@ -167,7 +172,7 @@ func TestTable_UpdateHistogram(t *testing.T) {
 		{
 			name:  "delete-rows-failure",
 			query: "test",
-			client: &testClient{
+			client: &mockClient{
 				queryReadMustFail: true,
 			},
 			wantErr: true,
@@ -175,7 +180,7 @@ func TestTable_UpdateHistogram(t *testing.T) {
 		{
 			name:  "query-run-failure",
 			query: "test",
-			client: &testClient{
+			client: &mockClient{
 				queryRunMustFail: true,
 			},
 			wantErr: true,
@@ -193,7 +198,7 @@ func TestTable_UpdateHistogram(t *testing.T) {
 				t.Errorf("Table.UpdateHistogram() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			if mockClient, ok := hist.Client.(*testClient); ok {
+			if mockClient, ok := hist.Client.(*mockClient); ok {
 				if tt.want != nil && !reflect.DeepEqual(mockClient.queries, tt.want) {
 					t.Errorf("UpdateHistogram(): expected %v, got %v", tt.want,
 						mockClient.queries)
