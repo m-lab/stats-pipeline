@@ -165,7 +165,7 @@ func TestTable_UpdateHistogram(t *testing.T) {
 			query:  "histogram generation query",
 			client: &mockClient{},
 			want: []string{
-				"DELETE FROM test_ds.test_table WHERE test_date BETWEEN \"2020-01-01\" AND \"2020-12-31\"",
+				"DELETE FROM test_ds.test_table WHERE date BETWEEN \"2020-01-01\" AND \"2020-12-31\"",
 				"histogram generation query",
 			},
 		},

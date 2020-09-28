@@ -13,7 +13,7 @@ import (
 
 const (
 	dateFormat    = "2006-01-02"
-	deleteRowsTpl = "DELETE FROM {{.Table}} WHERE test_date BETWEEN \"{{.Start}}\" AND \"{{.End}}\""
+	deleteRowsTpl = "DELETE FROM {{.Table}} WHERE date BETWEEN \"{{.Start}}\" AND \"{{.End}}\""
 )
 
 // Table represents a bigquery table containing histogram data.
@@ -43,7 +43,7 @@ func (t *Table) queryConfig(query string) bqiface.QueryConfig {
 	return qc
 }
 
-// deleteRows removes rows where test_date is within the provided range.
+// deleteRows removes rows where date is within the provided range.
 func (t *Table) deleteRows(ctx context.Context, start, end time.Time) error {
 	// TODO: partition table and delete per-day partitions, which is likely
 	// much more efficient.
