@@ -4,7 +4,7 @@ SELECT
   client.Geo.region AS region
 FROM `ndt.unified_downloads`
 WHERE
-  test_date >= '2020-01-01'
+  date >= '2020-01-01'
   AND client.geo.continent_code IS NOT NULL AND client.geo.continent_code != ''
   AND client.geo.country_code IS NOT NULL AND client.geo.country_code != ''
   AND client.Geo.region IS NOT NULL AND client.Geo.region != ''
