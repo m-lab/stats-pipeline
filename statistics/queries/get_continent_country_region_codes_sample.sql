@@ -4,7 +4,7 @@ SELECT
   client.Geo.region AS ISO3166_2region1
 FROM `measurement-lab.ndt.unified_downloads`
 WHERE
-  test_date >= '2020-01-01'
+  date >= '2020-01-01'
   AND client.geo.continent_code IN ("EU")
   AND client.geo.country_code IN ("IT")
   AND client.geo.continent_code IS NOT NULL AND client.geo.continent_code != ''
