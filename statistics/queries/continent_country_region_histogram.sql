@@ -146,7 +146,7 @@ dl_sample_counts AS (
 
 buckets AS (
   SELECT POW(10, x-.2) AS bucket_left, POW(10,x) AS bucket_right
-  FROM UNNEST(GENERATE_ARRAY(0, 4.2, .2)) AS x
+  FROM UNNEST(GENERATE_ARRAY(-5, 4.2, .2)) AS x
 ),
 # Count the samples that fall into each bucket
 dl_histogram_counts AS (
