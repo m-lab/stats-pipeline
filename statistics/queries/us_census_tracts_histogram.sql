@@ -1,30 +1,36 @@
 #standardSQL
 WITH
-counties AS (
+tracts AS (
   SELECT
-    county_name,
-    county_geom AS WKT,
-    CAST(geo_id AS STRING) AS GEOID
+    state_name,
+    CAST(geo_id AS STRING) AS GEOID,
+    tract_name,
+    lsad_name,
+    tract_geom AS WKT
   FROM
-    `bigquery-public-data.geo_us_boundaries.counties`
+    `bigquery-public-data.geo_census_tracts.us_census_tracts_national`
 ),
-counties_noWKT AS (
+tracts_noWKT AS (
   SELECT
-    county_name,
+    state_name,
+    tract_name,
+    lsad_name,
     CAST(geo_id AS STRING) AS GEOID
   FROM
-    `bigquery-public-data.geo_us_boundaries.counties`
+    `bigquery-public-data.geo_census_tracts.us_census_tracts_national`
 ),
 dl AS (
   SELECT
     date,
-    counties.GEOID AS GEOID,
+    tracts.GEOID AS GEOID,
     CONCAT(client.Geo.country_code,"-",client.Geo.region) AS state,
+    tracts.state_name AS state_name,
+    tracts.tract_name AS tract_name,
+    tracts.lsad_name AS lsad_name,
     NET.SAFE_IP_FROM_STRING(client.IP) AS ip,
-    a.MeanThroughputMbps AS mbps,
-    a.MinRTT AS MinRTT
+    a.MeanThroughputMbps AS mbps
   FROM
-    `measurement-lab.ndt.unified_downloads` tests, counties
+    `measurement-lab.ndt.unified_downloads` tests, tracts
   WHERE
     date BETWEEN @startdate AND @enddate
     AND client.Geo.country_name = "United States"
@@ -36,7 +42,7 @@ dl AS (
       ST_GeogPoint(
         client.Geo.longitude,
         client.Geo.latitude
-      ), counties.WKT
+      ), tracts.WKT
     )
     AND a.MeanThroughputMbps != 0
 ),
@@ -44,6 +50,9 @@ dl_stats_perip_perday AS (
   SELECT
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     ip,
     MIN(mbps) AS download_MIN,
@@ -53,12 +62,22 @@ dl_stats_perip_perday AS (
     APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)] AS download_Q75,
     MAX(mbps) AS download_MAX
   FROM dl
-  GROUP BY date, state, GEOID, ip
+  GROUP BY
+    date,
+    state,
+    state_name,
+    tract_name,
+    lsad_name,
+    GEOID,
+    ip
 ),
 dl_stats_perday AS (
   SELECT
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     MIN(download_MIN) AS download_MIN,
     APPROX_QUANTILES(download_Q25, 100) [SAFE_ORDINAL(25)] AS download_Q25,
@@ -67,28 +86,45 @@ dl_stats_perday AS (
     APPROX_QUANTILES(download_Q75, 100) [SAFE_ORDINAL(75)] AS download_Q75,
     MAX(download_MAX) AS download_MAX
   FROM dl_stats_perip_perday
-  GROUP BY date, state, GEOID
+  GROUP BY
+    date,
+    state,
+    state_name,
+    tract_name,
+    lsad_name,
+    GEOID
 ),
 dl_total_samples_pergeo_perday AS (
   SELECT
     date,
     COUNT(*) AS dl_total_samples,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID
   FROM dl
-  GROUP BY date, state, GEOID
+  GROUP BY
+    date,
+    state,
+    state_name,
+    tract_name,
+    lsad_name,
+    GEOID
 ),
 #############
 ul AS (
   SELECT
     date,
-    counties.GEOID AS GEOID,
+    tracts.GEOID AS GEOID,
     CONCAT(client.Geo.country_code,"-",client.Geo.region) AS state,
+    tracts.state_name AS state_name,
+    tracts.tract_name AS tract_name,
+    tracts.lsad_name AS lsad_name,
     NET.SAFE_IP_FROM_STRING(client.IP) AS ip,
-    a.MeanThroughputMbps AS mbps,
-    a.MinRTT AS MinRTT
+    a.MeanThroughputMbps AS mbps
   FROM
-    `measurement-lab.ndt.unified_uploads` tests, counties
+    `measurement-lab.ndt.unified_uploads` tests, tracts
   WHERE
     date BETWEEN @startdate AND @enddate
     AND client.Geo.country_name = "United States"
@@ -100,7 +136,7 @@ ul AS (
       ST_GeogPoint(
         client.Geo.longitude,
         client.Geo.latitude
-      ), counties.WKT
+      ), tracts.WKT
     )
     AND a.MeanThroughputMbps != 0
 ),
@@ -108,6 +144,9 @@ ul_stats_perip_perday AS (
   SELECT
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     ip,
     MIN(mbps) AS upload_MIN,
@@ -117,12 +156,22 @@ ul_stats_perip_perday AS (
     APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)] AS upload_Q75,
     MAX(mbps) AS upload_MAX
   FROM ul
-  GROUP BY date, state, GEOID, ip
+  GROUP BY
+    date,
+    state,
+    state_name,
+    tract_name,
+    lsad_name,
+    GEOID,
+    ip
 ),
 ul_stats_perday AS (
   SELECT
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     MIN(upload_MIN) AS upload_MIN,
     APPROX_QUANTILES(upload_Q25, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
@@ -131,16 +180,31 @@ ul_stats_perday AS (
     APPROX_QUANTILES(upload_Q75, 100) [SAFE_ORDINAL(75)] AS upload_Q75,
     MAX(upload_MAX) AS upload_MAX
   FROM ul_stats_perip_perday
-  GROUP BY date, state, GEOID
+  GROUP BY
+    date,
+    state,
+    state_name,
+    tract_name,
+    lsad_name,
+    GEOID
 ),
 ul_total_samples_pergeo_perday AS (
   SELECT
     date,
     COUNT(*) AS ul_total_samples,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID
   FROM ul
-  GROUP BY date, state, GEOID
+  GROUP BY
+    date,
+    state,
+    state_name,
+    tract_name,
+    lsad_name,
+    GEOID
 ),
 # Now generate the daily histograms of the Maximum measured download speed, per IP, per day.
 
@@ -149,6 +213,9 @@ max_dl_per_day_ip AS (
   SELECT
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     ip,
     MAX(mbps) AS download_MAX
@@ -156,6 +223,9 @@ max_dl_per_day_ip AS (
   GROUP BY
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     ip
 ),
@@ -171,12 +241,18 @@ dl_sample_counts AS (
   SELECT
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     COUNT(*) AS samples
   FROM max_dl_per_day_ip
   GROUP BY
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID
 ),
 # Generate equal sized buckets in log-space. This returns 21 buckets pergeo perday from 0.63 to 10000.
@@ -191,6 +267,9 @@ dl_histogram_counts AS (
   SELECT
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     bucket_left AS bucket_min,
     bucket_right AS bucket_max,
@@ -199,6 +278,9 @@ dl_histogram_counts AS (
   GROUP BY
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     bucket_min,
     bucket_max
@@ -208,19 +290,25 @@ dl_histogram AS (
   SELECT
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     bucket_min,
     bucket_max,
     bucket_count / samples AS dl_frac,
     samples AS dl_samples
   FROM dl_histogram_counts
-  JOIN dl_sample_counts USING (date, state, GEOID)
+  JOIN dl_sample_counts USING (date, state, state_name, tract_name, lsad_name, GEOID)
 ),
 # Generate histogram for uploads
 max_ul_per_day_ip AS (
   SELECT
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     ip,
     MAX(mbps) AS upload_MAX
@@ -228,6 +316,9 @@ max_ul_per_day_ip AS (
   GROUP BY
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     ip
 ),
@@ -236,12 +327,18 @@ ul_sample_counts AS (
   SELECT
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     COUNT(*) AS samples
   FROM max_ul_per_day_ip
   GROUP BY
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID
 ),
 # Count the samples that fall into each bucket
@@ -249,6 +346,9 @@ ul_histogram_counts AS (
   SELECT
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     bucket_left AS bucket_min,
     bucket_right AS bucket_max,
@@ -257,6 +357,9 @@ ul_histogram_counts AS (
   GROUP BY
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     bucket_min,
     bucket_max
@@ -266,20 +369,23 @@ ul_histogram AS (
   SELECT
     date,
     state,
+    state_name,
+    tract_name,
+    lsad_name,
     GEOID,
     bucket_min,
     bucket_max,
     bucket_count / samples AS ul_frac,
     samples AS ul_samples
   FROM ul_histogram_counts
-  JOIN ul_sample_counts USING (date, state, GEOID)
+  JOIN ul_sample_counts USING (date, state, state_name, tract_name, lsad_name, GEOID)
 )
 # Show the results
 SELECT * FROM dl_histogram
-JOIN ul_histogram USING (date, state, GEOID, bucket_min, bucket_max)
-JOIN dl_stats_perday USING (date, state, GEOID)
-JOIN dl_total_samples_pergeo_perday USING (date, state, GEOID)
-JOIN ul_stats_perday USING (date, state, GEOID)
-JOIN ul_total_samples_pergeo_perday USING (date, state, GEOID)
-JOIN counties_noWKT USING (GEOID)
-ORDER BY date, state, GEOID, bucket_min, bucket_max
+JOIN ul_histogram USING (date, state, state_name, tract_name, lsad_name, GEOID, bucket_min, bucket_max)
+JOIN dl_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
+JOIN dl_total_samples_pergeo_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
+JOIN ul_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
+JOIN ul_total_samples_pergeo_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
+JOIN tracts_noWKT USING (GEOID)
+ORDER BY date, state, dl_histogram.state_name, dl_histogram.tract_name, dl_histogram.lsad_name, GEOID, bucket_min, bucket_max
