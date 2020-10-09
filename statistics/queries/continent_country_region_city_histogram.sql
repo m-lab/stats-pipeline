@@ -44,12 +44,12 @@ dl_stats_perip_perday AS (
     ISO3166_2region1,
     city,
     ip,
-    MIN(mbps) AS MIN_download_Mbps,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)] AS LOWER_QUART_download_Mbps,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(50)] AS MED_download_Mbps,
-    AVG(mbps) AS MEAN_download_Mbps,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)] AS UPPER_QUART_download_Mbps,
-    MAX(mbps) AS MAX_download_Mbps
+    MIN(mbps) AS download_MIN,
+    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)] AS download_Q25,
+    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(50)] AS download_MED,
+    AVG(mbps) AS download_AVG,
+    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)] AS download_Q75,
+    MAX(mbps) AS download_MAX
   FROM dl_per_location_cleaned
   GROUP BY date, continent_code, country_code, country_name, ISO3166_2region1, city, ip
 ),
@@ -62,12 +62,12 @@ dl_stats_per_day AS (
     country_name,
     ISO3166_2region1,
     city,
-    MIN(MIN_download_Mbps) AS MIN_download_Mbps,
-    APPROX_QUANTILES(LOWER_QUART_download_Mbps, 100) [SAFE_ORDINAL(25)] AS LOWER_QUART_download_Mbps,
-    APPROX_QUANTILES(MED_download_Mbps, 100) [SAFE_ORDINAL(50)] AS MED_download_Mbps,
-    AVG(MEAN_download_Mbps) AS MEAN_download_Mbps,
-    APPROX_QUANTILES(UPPER_QUART_download_Mbps, 100) [SAFE_ORDINAL(75)] AS UPPER_QUART_download_Mbps,
-    MAX(MAX_download_Mbps) AS MAX_download_Mbps
+    MIN(download_MIN) AS download_MIN,
+    APPROX_QUANTILES(download_Q25, 100) [SAFE_ORDINAL(25)] AS download_Q25,
+    APPROX_QUANTILES(download_MED, 100) [SAFE_ORDINAL(50)] AS download_MED,
+    AVG(download_AVG) AS download_AVG,
+    APPROX_QUANTILES(download_Q75, 100) [SAFE_ORDINAL(75)] AS download_Q75,
+    MAX(download_MAX) AS download_MAX
   FROM
     dl_stats_perip_perday
   GROUP BY date, continent_code, country_code, country_name, ISO3166_2region1, city
@@ -343,4 +343,3 @@ JOIN dl_stats_per_day USING (date, continent_code, country_code, country_name, I
 JOIN dl_total_samples_per_geo USING (date, continent_code, country_code, country_name, ISO3166_2region1, city)
 JOIN ul_stats_per_day USING (date, continent_code, country_code, country_name, ISO3166_2region1, city)
 JOIN ul_total_samples_per_geo USING (date, continent_code, country_code, country_name, ISO3166_2region1, city)
-ORDER BY date, continent_code, country_code, country_name, ISO3166_2region1, city, bucket_min, bucket_max
