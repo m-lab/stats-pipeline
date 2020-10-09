@@ -282,4 +282,3 @@ JOIN dl_total_samples_pergeo_perday USING (date, state, GEOID)
 JOIN ul_stats_perday USING (date, state, GEOID)
 JOIN ul_total_samples_pergeo_perday USING (date, state, GEOID)
 JOIN counties_noWKT USING (GEOID)
-ORDER BY date, state, GEOID, bucket_min, bucket_max
