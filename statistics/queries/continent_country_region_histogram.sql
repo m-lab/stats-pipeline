@@ -364,4 +364,3 @@ JOIN dl_stats_perday USING (date, continent_code, country_code, country_name, IS
 JOIN dl_total_samples_pergeo_perday USING (date, continent_code, country_code, country_name, ISO3166_2region1)
 JOIN ul_stats_perday USING (date, continent_code, country_code, country_name, ISO3166_2region1)
 JOIN ul_total_samples_pergeo_perday USING (date, continent_code, country_code, country_name, ISO3166_2region1)
-ORDER BY date, continent_code, country_code, country_name, ISO3166_2region1, bucket_min, bucket_max
