@@ -10,15 +10,6 @@ tracts AS (
   FROM
     `bigquery-public-data.geo_census_tracts.us_census_tracts_national`
 ),
-tracts_noWKT AS (
-  SELECT
-    state_name,
-    tract_name,
-    lsad_name,
-    CAST(geo_id AS STRING) AS GEOID
-  FROM
-    `bigquery-public-data.geo_census_tracts.us_census_tracts_national`
-),
 dl AS (
   SELECT
     date,
@@ -387,5 +378,3 @@ JOIN dl_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOI
 JOIN dl_total_samples_pergeo_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
 JOIN ul_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
 JOIN ul_total_samples_pergeo_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
-JOIN tracts_noWKT USING (GEOID)
-ORDER BY date, state, dl_histogram.state_name, dl_histogram.tract_name, dl_histogram.lsad_name, GEOID, bucket_min, bucket_max
