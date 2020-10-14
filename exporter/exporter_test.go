@@ -24,9 +24,6 @@ type mockClient struct {
 	// queryReadMustFail controls whether the Read() method will fail for
 	// queries created by this client object.
 	queryReadMustFail bool
-	// queryRunMustFail controler whether the Run() method will fail for
-	// queries created by this client object.
-	queryRunMustFail bool
 
 	// queries stores every query run through this client so it can be
 	// checked later in tests.
@@ -48,7 +45,6 @@ func (c *mockClient) Query(query string) bqiface.Query {
 		client:       c,
 		q:            query,
 		readMustFail: c.queryReadMustFail,
-		runMustFail:  c.queryRunMustFail,
 		iterator:     c.iterator,
 	}
 }
@@ -129,6 +125,10 @@ func (it *mockRowIterator) Next(dst interface{}) error {
 	return nil
 }
 
+func (it *mockRowIterator) Reset() {
+	it.index = 0
+}
+
 func TestNew(t *testing.T) {
 	bq, err := bqfake.NewClient(context.Background(), "test")
 	testingx.Must(t, err, "cannot init bq client")
@@ -144,6 +144,8 @@ func TestNew(t *testing.T) {
 }
 
 func TestJSONExporter_Export(t *testing.T) {
+	const selectQuery = "SELECT * FROM test"
+
 	// Create an iterator returning a fake row.
 	it := &mockRowIterator{
 		rows: []map[string]bigquery.Value{
@@ -167,20 +169,11 @@ func TestJSONExporter_Export(t *testing.T) {
 	fakeBucket := gcsfake.NewBucketHandle()
 	gcs.AddTestBucket("test", fakeBucket)
 
-	queryTpl := template.Must(template.New("queryTpl").
-		Parse("SELECT * FROM {{ .sourceTable }} {{ .whereClause }}"))
 	outputPathTpl := template.Must(template.New("outputPathTpl").
 		Parse("v0/{{ .field }}/{{ .year }}/histogram_daily_stats.json"))
 
-	gen := &JSONExporter{
-		bqClient:      bq,
-		storageClient: gcs,
-		bucket:        "test",
-	}
-	err := gen.Export(context.Background(), queryTpl, map[string]string{
-		"sourceTable": "test",
-		"whereClause": "",
-	}, outputPathTpl)
+	gen := New(bq, gcs, "test")
+	err := gen.Export(context.Background(), selectQuery, outputPathTpl)
 	if err != nil {
 		t.Fatalf("Export() returned an error: %v", err)
 	}
@@ -192,20 +185,13 @@ func TestJSONExporter_Export(t *testing.T) {
 	if string(content) != `[{"bucket_min":"0"}]` {
 		t.Errorf("Export() wrote unexpected data on GCS: %v", string(content))
 	}
-	if len(bq.queries) != 1 || bq.queries[0] != "SELECT * FROM test " {
+	if len(bq.queries) != 1 || bq.queries[0] != "SELECT * FROM test" {
 		t.Errorf("Export() did not run the expected queries: %v", bq.queries)
 	}
-	it.index = 0
-
-	// If template execution fails, Export() should return the error.
-	failingTpl := template.Must(template.New("fail").Parse("{{nil}}"))
-	err = gen.Export(context.Background(), failingTpl, nil, outputPathTpl)
-	if err == nil || !strings.Contains(err.Error(), "not a command") {
-		t.Errorf("Export() didn't return the expected error: %v", err)
-	}
+	it.Reset()
 	// Make the iterator return an error.
 	it.iterErr = errors.New("iterator error")
-	err = gen.Export(context.Background(), queryTpl, nil, outputPathTpl)
+	err = gen.Export(context.Background(), selectQuery, outputPathTpl)
 	if !errors.Is(err, it.iterErr) {
 		t.Errorf("Export() didn't return the expected error: %v", err)
 	}
@@ -214,7 +200,7 @@ func TestJSONExporter_Export(t *testing.T) {
 	gen.bqClient = &mockClient{
 		queryReadMustFail: true,
 	}
-	err = gen.Export(context.Background(), queryTpl, nil, outputPathTpl)
+	err = gen.Export(context.Background(), selectQuery, outputPathTpl)
 	if err == nil || !strings.Contains(err.Error(), "Read() failed") {
 		t.Errorf("Export() didn't return the expected error: %v", err)
 	}
@@ -235,14 +221,14 @@ func TestJSONExporter_Export(t *testing.T) {
 		},
 	}
 	bq.iterator = badDataIt
-	err = gen.Export(context.Background(), queryTpl, nil, outputPathTpl)
+	err = gen.Export(context.Background(), selectQuery, outputPathTpl)
 	if !strings.Contains(err.Error(), "unsupported type") {
 		t.Errorf("Export() didn't return the expected error: %v", err)
 	}
 	bq.iterator = it
 	// Bad output template.
 	failingOutputPathTpl := template.Must(template.New("fail").Parse("{{nil}}"))
-	err = gen.Export(context.Background(), queryTpl, nil, failingOutputPathTpl)
+	err = gen.Export(context.Background(), selectQuery, failingOutputPathTpl)
 	if err == nil || !strings.Contains(err.Error(), "not a command") {
 		t.Errorf("Export() didn't return the expected error: %v", err)
 	}
@@ -251,12 +237,9 @@ func TestJSONExporter_Export(t *testing.T) {
 	fakeBucket.Object(
 		"v0/test/2020/histogram_daily_stats.json").(*gcsfake.ObjectHandle).
 		WritesMustFail = true
-	err = gen.Export(context.Background(), queryTpl, nil, outputPathTpl)
+	err = gen.Export(context.Background(), selectQuery, outputPathTpl)
 	if err == nil || !strings.Contains(err.Error(), "write failed") {
 		t.Errorf("Export() didn't return the expected error: %v", err)
 
 	}
-	fakeBucket.Object(
-		"v0/test/2020/histogram_daily_stats.json").(*gcsfake.ObjectHandle).
-		WritesMustFail = false
 }

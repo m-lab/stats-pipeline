@@ -14,6 +14,7 @@ import (
 	"google.golang.org/api/iterator"
 )
 
+// JSONExporter is a JSON exporter for histogram data on BigQuery.
 type JSONExporter struct {
 	bqClient      bqiface.Client
 	storageClient stiface.Client
@@ -21,7 +22,7 @@ type JSONExporter struct {
 	bucket string
 }
 
-// New generates a new JSONExporter
+// New generates a new JSONExporter.
 func New(bqClient bqiface.Client, storageClient stiface.Client, bucket string) *JSONExporter {
 	return &JSONExporter{
 		bqClient:      bqClient,
@@ -30,18 +31,23 @@ func New(bqClient bqiface.Client, storageClient stiface.Client, bucket string) *
 	}
 }
 
+// Export runs the provided SQL query and, for each row in the result, uploads
+// a file to the provided outputPath on GCS. This file contains the JSON
+// representation of the "histograms" field, which must be present on each row.
+// The outputPath is a template whose parameters are provided by the BigQuery
+// row's fields.
+// e.g. if outputPath is "{{ .Year }}/output.json" and we have a row per year,
+// the histograms will be uploaded to:
+// - 2010/output.json
+// - 2020/output.json
+// - etc.
+//
+// If any of the steps (running the query, reading the result, marshalling,
+// uploading) fails, this function returns the corresponding error.
 func (gen *JSONExporter) Export(ctx context.Context,
-	selectQuery *template.Template, params map[string]string,
-	outputPath *template.Template) error {
-	// Interpolate query template
-	buf := new(bytes.Buffer)
-	err := selectQuery.Execute(buf, params)
-	if err != nil {
-		return err
-	}
-	log.Printf("DEBUG: select query: %s", buf.String())
+	selectQuery string, outputPath *template.Template) error {
 	// Run the SELECT query to get histogram data
-	q := gen.bqClient.Query(buf.String())
+	q := gen.bqClient.Query(selectQuery)
 	it, err := q.Read(ctx)
 	if err != nil {
 		return err
