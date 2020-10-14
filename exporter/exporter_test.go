@@ -192,6 +192,9 @@ func TestJSONExporter_Export(t *testing.T) {
 	if string(content) != `[{"bucket_min":"0"}]` {
 		t.Errorf("Export() wrote unexpected data on GCS: %v", string(content))
 	}
+	if len(bq.queries) != 1 || bq.queries[0] != "SELECT * FROM test " {
+		t.Errorf("Export() did not run the expected queries: %v", bq.queries)
+	}
 	it.index = 0
 
 	// If template execution fails, Export() should return the error.
