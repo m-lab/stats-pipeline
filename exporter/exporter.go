@@ -44,6 +44,8 @@ func New(bqClient bqiface.Client, storageClient stiface.Client, bucket string) *
 //
 // If any of the steps (running the query, reading the result, marshalling,
 // uploading) fails, this function returns the corresponding error.
+//
+// Note: outputPath should not start with a "/".
 func (gen *JSONExporter) Export(ctx context.Context,
 	selectQuery string, outputPath *template.Template) error {
 	// Run the SELECT query to get histogram data
