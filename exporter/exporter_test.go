@@ -232,7 +232,7 @@ func TestJSONExporter_Export(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "not a command") {
 		t.Errorf("Export() didn't return the expected error: %v", err)
 	}
-	it.index = 0
+	it.Reset()
 	// Make writes to the output path fail.
 	fakeBucket.Object(
 		"v0/test/2020/histogram_daily_stats.json").(*gcsfake.ObjectHandle).
