@@ -61,7 +61,8 @@ func (t *Table) deleteRows(ctx context.Context, start, end time.Time) error {
 	query := t.Client.Query(q.String())
 	_, err = query.Read(ctx)
 	if err != nil {
-		return err
+		// This can happen if, for example, the table hasn't been created yet.
+		log.Printf("Warning: cannot remove previous rows (%v)", err)
 	}
 
 	return nil
