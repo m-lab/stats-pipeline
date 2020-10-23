@@ -215,12 +215,12 @@ ul_stats_perip_perday AS (
     ISO3166_2region1,
     city,
     ip,
-    MIN(mbps) AS MIN_upload_Mbps,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)] AS LOWER_QUART_upload_Mbps,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(50)] AS MED_upload_Mbps,
-    AVG(mbps) AS MEAN_upload_Mbps,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)] AS UPPER_QUART_upload_Mbps,
-    MAX(mbps) AS MAX_upload_Mbps
+    MIN(mbps) AS upload_MIN,
+    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
+    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(50)] AS upload_MED,
+    AVG(mbps) AS upload_AVG,
+    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)] AS upload_Q75,
+    MAX(mbps) AS upload_MAX
   FROM dl_per_location_cleaned
   GROUP BY date, continent_code, country_code, country_name, ISO3166_2region1, city, ip
 ),
@@ -233,12 +233,12 @@ ul_stats_per_day AS (
     country_name,
     ISO3166_2region1,
     city,
-    MIN(MIN_upload_Mbps) AS MIN_upload_Mbps,
-    APPROX_QUANTILES(LOWER_QUART_upload_Mbps, 100) [SAFE_ORDINAL(25)] AS LOWER_QUART_upload_Mbps,
-    APPROX_QUANTILES(MED_upload_Mbps, 100) [SAFE_ORDINAL(50)] AS MED_upload_Mbps,
-    AVG(MEAN_upload_Mbps) AS MEAN_upload_Mbps,
-    APPROX_QUANTILES(UPPER_QUART_upload_Mbps, 100) [SAFE_ORDINAL(75)] AS UPPER_QUART_upload_Mbps,
-    MAX(MAX_upload_Mbps) AS MAX_upload_Mbps
+    MIN(upload_MIN) AS upload_MIN,
+    APPROX_QUANTILES(upload_Q25, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
+    APPROX_QUANTILES(upload_MED, 100) [SAFE_ORDINAL(50)] AS upload_MED,
+    AVG(upload_AVG) AS upload_AVG,
+    APPROX_QUANTILES(upload_Q75, 100) [SAFE_ORDINAL(75)] AS upload_Q75,
+    MAX(upload_MAX) AS upload_MAX
   FROM
     ul_stats_perip_perday
   GROUP BY date, continent_code, country_code, country_name, ISO3166_2region1, city
