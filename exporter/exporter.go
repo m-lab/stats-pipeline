@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"text/template"
+	"time"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
@@ -20,6 +21,11 @@ type JSONExporter struct {
 	storageClient stiface.Client
 
 	bucket string
+}
+
+type UploadJob struct {
+	objName string
+	content []byte
 }
 
 // New generates a new JSONExporter.
@@ -54,21 +60,32 @@ func (gen *JSONExporter) Export(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	// Create 10 workers to upload files concurrently.
+	up := uploader.New(gen.storageClient, gen.bucket)
+	jobs := make(chan *UploadJob)
+	results := make(chan error)
+	for w := 1; w <= 10; w++ {
+		go gen.uploadWorker(w, ctx, up, jobs, results)
+	}
 	// Iterate over the returned rows and upload results to GCS.
 	type bqRow = map[string]bigquery.Value
 	for {
 		var row bqRow
+		t1 := time.Now()
 		err := it.Next(&row)
+		if err != nil {
+			return err
+		}
+		log.Printf("Next() took %d ms", time.Now().Sub(t1).Milliseconds())
+		log.Printf("Paging token: %s", it.PageInfo().Token)
 		if err == iterator.Done {
+			log.Println("Done!")
 			break
 		}
 		if err != nil {
 			return err
 		}
 		j, err := json.Marshal(row["histograms"])
-		if err != nil {
-			return err
-		}
 		buf := new(bytes.Buffer)
 		err = outputPath.Execute(buf, row)
 		if err != nil {
@@ -77,11 +94,24 @@ func (gen *JSONExporter) Export(ctx context.Context,
 			return err
 		}
 		log.Printf("Uploading %s...", buf.String())
-		up := uploader.New(gen.storageClient, gen.bucket)
-		_, err = up.Upload(ctx, buf.String(), j)
-		if err != nil {
-			return err
+
+		jobs <- &UploadJob{
+			objName: buf.String(),
+			content: j,
 		}
 	}
+	close(jobs)
 	return nil
+}
+
+func (gen *JSONExporter) uploadWorker(id int, ctx context.Context,
+	up *uploader.Uploader, jobs <-chan *UploadJob, results chan<- error) {
+	for j := range jobs {
+		log.Printf("w: %d, object: %s\n", id, j.objName)
+		_, err := up.Upload(ctx, j.objName, j.content)
+		if err != nil {
+			results <- err
+		}
+		log.Printf("w: %d, uploaded\n", id)
+	}
 }
