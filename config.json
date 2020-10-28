@@ -1,0 +1,66 @@
+{
+    "histograms": {
+        "regions": {
+            "queryFile": "statistics/queries/continent_country_region_histogram.sql",
+            "dataset": "statistics",
+            "table": "regions"
+        },
+        "continents": {
+            "queryFile": "statistics/queries/continent_histogram.sql",
+            "dataset": "statistics",
+            "table": "continents"
+        },
+        "countries": {
+            "queryFile": "statistics/queries/continent_country_histogram.sql",
+            "dataset": "statistics",
+            "table": "countries"
+        },
+        "tracts": {
+            "queryFile": "statistics/queries/us_census_tracts_histogram.sql",
+            "dataset": "statistics",
+            "table": "tracts"
+        },
+        "counties": {
+            "queryFile": "statistics/queries/us_county_histogram.sql",
+            "dataset": "statistics",
+            "table": "counties"
+        },
+        "cities": {
+            "queryFile": "statistics/queries/continent_country_region_city_histogram.sql",
+            "dataset": "statistics",
+            "table": "cities"
+        }
+    },
+    "exports": {
+        "regions": {
+            "sourceTable": "mlab-sandbox.statistics.regions",
+            "queryFile": "statistics/exports/regions.sql",
+            "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .year }}/histogram_daily_stats.json"
+        },
+        "continents": {
+            "sourceTable": "mlab-sandbox.statistics.continents",
+            "queryFile": "statistics/exports/continents.sql",
+            "outputPath": "v0/{{ .continent_code }}/{{ .year }}/histogram_daily_stats.json"
+        },
+        "countries": {
+            "sourceTable": "mlab-sandbox.statistics.countries",
+            "queryFile": "statistics/exports/countries.sql",
+            "outputPath":"v0/{{ .continent_code }}/{{ .country_code }}/{{ .year }}/histogram_daily_stats.json"
+        },
+        "tracts": {
+            "sourceTable": "mlab-sandbox.statistics.tracts",
+            "queryFile": "statistics/exports/us_tracts.sql",
+            "outputPath": "v0/NA/US/tracts/{{ .GEOID }}/{{ .year }}/histogram_daily_stats.json"
+        },
+        "counties": {
+            "sourceTable": "mlab-sandbox.statistics.counties",
+            "queryFile": "statistics/exports/us_counties.sql",
+            "outputPath": "v0/NA/US/counties/{{ .GEOID }}/{{ .year }}/histogram_daily_stats.json"
+        },
+        "cities": {
+            "sourceTable": "mlab-sandbox.statistics.cities",
+            "queryFile": "statistics/exports/cities.sql",
+            "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .city }}/{{ .year }}/histogram_daily_stats.json"
+        }
+    }
+}
