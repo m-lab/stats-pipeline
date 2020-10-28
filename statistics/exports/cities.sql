@@ -1,4 +1,4 @@
-SELECT continent_code, country_code, ISO3166_2region1, EXTRACT(YEAR from date) as year, ARRAY_AGG(
+SELECT continent_code, country_code, ISO3166_2region1, city, EXTRACT(YEAR from date) as year, ARRAY_AGG(
     struct(
         date,
         bucket_min,
@@ -24,4 +24,4 @@ SELECT continent_code, country_code, ISO3166_2region1, EXTRACT(YEAR from date) a
     ) order by date) as histograms
 FROM {{ .sourceTable }}
 {{ .whereClause }}
-GROUP BY continent_code, country_code, ISO3166_2region1, year
+GROUP BY continent_code, country_code, ISO3166_2region1, city, year
