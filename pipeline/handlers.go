@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"bytes"
 	"context"
 	"io/ioutil"
 	"log"
@@ -74,18 +73,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		selectTpl := template.Must(template.New(name).
 			Option("missingkey=zero").Parse(string(content)))
-
-		var buf bytes.Buffer
-		err = selectTpl.Execute(&buf, map[string]string{
-			"sourceTable": config.SourceTable,
-		})
-		if err != nil {
-			log.Printf("Cannot execute template: %v", err)
-			continue
-		}
 		outputTpl := template.Must(template.New(name).Parse(config.OutputPath))
 
-		h.exporter.Export(r.Context(), buf.String(), outputTpl)
+		h.exporter.Export(r.Context(), config.SourceTable, selectTpl,
+			outputTpl)
 	}
 }
 
