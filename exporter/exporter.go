@@ -230,12 +230,27 @@ func (gen *JSONExporter) queryWorker(id int, uploadCounter *int32, wg *sync.Wait
 					currentFile = currentFile[:0]
 					currentRowKey = rowKey
 				}
-				currentFile = append(currentFile, newRow)
+				currentFile = append(currentFile, removeFieldsFromRow(newRow, j.fields))
 				oldRow = newRow
 			}
 		}
 	}
+}
 
+func removeFieldsFromRow(row bqRow, fields []string) bqRow {
+	newRow := bqRow{}
+	for fieldName, fieldValue := range row {
+		found := false
+		for _, k := range fields {
+			if fieldName == k {
+				found = true
+			}
+		}
+		if !found {
+			newRow[fieldName] = fieldValue
+		}
+	}
+	return newRow
 }
 
 func (gen *JSONExporter) uploadWorker(id int, uploadCounter *int32,
@@ -255,6 +270,7 @@ func (gen *JSONExporter) uploadWorker(id int, uploadCounter *int32,
 			if err != nil {
 				results <- err
 			}
+			log.Printf("Uploaded: %s", j.objName)
 		}
 	}
 }
