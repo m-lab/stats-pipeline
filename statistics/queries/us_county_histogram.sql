@@ -198,11 +198,12 @@ ul_samples_stats AS (
     state,
     GEOID
 ),
- Generate the histogram with samples per bucket and frequencies
+# Generate the histogram with samples per bucket and frequencies
 ul_histogram AS (
   SELECT
     date,
-    continent_code,
+    state,
+    GEOID,
     bucket_left AS bucket_min,
     bucket_right AS bucket_max,
     COUNTIF(upload_MAX < bucket_right AND upload_MAX >= bucket_left) AS ul_samples_bucket,
@@ -211,7 +212,8 @@ ul_histogram AS (
   FROM ul_stats_perip_perday CROSS JOIN buckets
   GROUP BY
     date,
-    continent_code,
+    state,
+    GEOID,
     bucket_min,
     bucket_max
 )
@@ -219,7 +221,9 @@ ul_histogram AS (
 SELECT * FROM dl_histogram
 JOIN ul_histogram USING (date, state, GEOID, bucket_min, bucket_max)
 JOIN dl_stats_perday USING (date, state, GEOID)
-JOIN dl_total_samples_pergeo_perday USING (date, state, GEOID)
 JOIN ul_stats_perday USING (date, state, GEOID)
-JOIN ul_total_samples_pergeo_perday USING (date, state, GEOID)
 JOIN counties_noWKT USING (GEOID)
+JOIN dl_samples_total USING (date, state, GEOID)
+JOIN ul_samples_total USING (date, state, GEOID)
+JOIN dl_samples_stats USING (date, state, GEOID)
+JOIN ul_samples_stats USING (date, state, GEOID)
