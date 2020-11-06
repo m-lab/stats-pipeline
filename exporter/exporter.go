@@ -19,6 +19,7 @@ import (
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
 	"github.com/googleapis/google-cloud-go-testing/storage/stiface"
 	"github.com/m-lab/go/uploader"
+	"github.com/m-lab/stats-pipeline/config"
 	"google.golang.org/api/iterator"
 )
 
@@ -36,6 +37,11 @@ type JSONExporter struct {
 type UploadJob struct {
 	objName string
 	content []byte
+}
+
+type UploadResult struct {
+	objName string
+	err     error
 }
 
 type QueryJob struct {
@@ -68,8 +74,10 @@ func New(bqClient bqiface.Client, storageClient stiface.Client, bucket string) *
 // uploading) fails, this function returns the corresponding error.
 //
 // Note: outputPath should not start with a "/".
-func (exporter *JSONExporter) Export(ctx context.Context, sourceTable string,
-	queryTpl *template.Template, outputPath *template.Template) error {
+func (exporter *JSONExporter) Export(ctx context.Context,
+	config config.ExportConfig, sourceTable string,
+	queryTpl *template.Template, outputPath *template.Template,
+	year string) error {
 	// Retrieve list of fields from the output path template.
 	var templateFields []string
 	var fields []string
@@ -86,22 +94,26 @@ func (exporter *JSONExporter) Export(ctx context.Context, sourceTable string,
 	log.Printf("Fields: %s", fields)
 
 	// Generate WHERE clauses to shard the export query.
-	clauses, err := exporter.generateWhereClauses(ctx, sourceTable, fields)
+	clauses, err := exporter.generateWhereClauses(ctx, sourceTable,
+		config.ShardKey, year, config.BatchSize)
 	if err != nil {
 		log.Print(err)
 		return err
 	}
 
+	for _, c := range clauses {
+		log.Print(c)
+	}
+
 	queryJobs := make(chan *QueryJob)
 	uploadJobs := make(chan *UploadJob)
-	results := make(chan error)
+	results := make(chan UploadResult)
 	var uploadCounter int32
-	go func(counter *int32) {
-		for ctx.Err() == nil {
-			log.Printf("Upload queue: %d", atomic.LoadInt32(counter))
-			time.Sleep(1 * time.Second)
-		}
-	}(&uploadCounter)
+	var queriesDone int32
+
+	// Start a goroutine to print statistics periodically.
+	go printStats(ctx, &uploadCounter, &queriesDone, len(clauses), results)
+
 	queryWg := sync.WaitGroup{}
 	// Create queryWorkers and uploadWorkers.
 	for w := 1; w <= 15; w++ {
@@ -110,7 +122,7 @@ func (exporter *JSONExporter) Export(ctx context.Context, sourceTable string,
 	}
 	up := uploader.New(exporter.storageClient, exporter.bucket)
 	uploadWg := sync.WaitGroup{}
-	for w := 1; w <= 20; w++ {
+	for w := 1; w <= 25; w++ {
 		uploadWg.Add(1)
 		go exporter.uploadWorker(w, &uploadCounter, &uploadWg, ctx, up, uploadJobs, results)
 	}
@@ -132,6 +144,7 @@ func (exporter *JSONExporter) Export(ctx context.Context, sourceTable string,
 			fields:     fields,
 			outputPath: outputPath,
 		}
+		queriesDone++
 	}
 	close(queryJobs)
 	queryWg.Wait()
@@ -160,13 +173,14 @@ func (gen *JSONExporter) queryWorker(id int, uploadCounter *int32, wg *sync.Wait
 
 	defer wg.Done()
 
-	var j *QueryJob
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case j = <-queryJobs:
-			log.Printf("w: %d, q: %s", id, j.query)
+		case j := <-queryJobs:
+			if j == nil {
+				return
+			}
 			// Run the SELECT query to get histogram data
 			q := gen.bqClient.Query(j.query)
 			it, err := q.Read(ctx)
@@ -183,21 +197,20 @@ func (gen *JSONExporter) queryWorker(id int, uploadCounter *int32, wg *sync.Wait
 				it.PageInfo().MaxSize = 100000
 				err := it.Next(&newRow)
 				if err != nil {
-					log.Print(err)
-					break
-				}
-				if err == iterator.Done {
-					log.Println("Done!")
-					// If this was the last row, upload the file so far.
-					buf := new(bytes.Buffer)
-					err = j.outputPath.Execute(buf, oldRow)
-					if err != nil {
-						log.Printf("Cannot generate path (tpl:%s): %v",
-							j.outputPath.Root.String(), err)
+					if err == iterator.Done {
+						// If this was the last row, upload the file so far.
+						buf := new(bytes.Buffer)
+						err = j.outputPath.Execute(buf, oldRow)
+						if err != nil {
+							log.Printf("Cannot generate path (tpl:%s): %v",
+								j.outputPath.Root.String(), err)
+						}
+						//log.Printf("Uploading %s (len: %d)...", buf.String(), len(currentFile))
+						atomic.AddInt32(uploadCounter, 1)
+						gen.UploadFile(buf.String(), currentFile, uploadJobs)
+					} else {
+						log.Print(err)
 					}
-					log.Printf("Uploading %s (len: %d)...", buf.String(), len(currentFile))
-					atomic.AddInt32(uploadCounter, 1)
-					gen.UploadFile(buf.String(), currentFile, uploadJobs)
 					break
 				}
 				// Calculate the row key by combining all the fields that are in the
@@ -215,7 +228,6 @@ func (gen *JSONExporter) queryWorker(id int, uploadCounter *int32, wg *sync.Wait
 				} else if rowKey != currentRowKey {
 					// If the row key has changed, send the current data to GCS and start
 					// a new file.
-					log.Printf("Row key: %s -> %s", currentRowKey, rowKey)
 					buf := new(bytes.Buffer)
 					err = j.outputPath.Execute(buf, oldRow)
 					if err != nil {
@@ -256,21 +268,23 @@ func removeFieldsFromRow(row bqRow, fields []string) bqRow {
 func (gen *JSONExporter) uploadWorker(id int, uploadCounter *int32,
 	wg *sync.WaitGroup,
 	ctx context.Context, up *uploader.Uploader,
-	jobs <-chan *UploadJob, results chan<- error) {
+	jobs <-chan *UploadJob, results chan<- UploadResult) {
 	defer wg.Done()
 
-	var j *UploadJob
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case j = <-jobs:
+		case j := <-jobs:
+			if j == nil {
+				return
+			}
 			atomic.AddInt32(uploadCounter, -1)
 			_, err := up.Upload(ctx, j.objName, j.content)
-			if err != nil {
-				results <- err
+			results <- UploadResult{
+				objName: j.objName,
+				err:     err,
 			}
-			log.Printf("Uploaded: %s", j.objName)
 		}
 	}
 }
@@ -288,28 +302,25 @@ func listNodeFields(node parse.Node, res []string) []string {
 	return res
 }
 
-func (gen *JSONExporter) generateWhereClauses(ctx context.Context, tableName string,
-	fields []string) ([]string, error) {
-	// If we have two or fewer fields, there is no need for sharding so we
-	// return a single, empty WHERE clause.
-	if len(fields) <= 2 {
-		return []string{""}, nil
+func (gen *JSONExporter) generateWhereClauses(ctx context.Context, tableName,
+	field, year string, batchSize int) ([]string, error) {
+	yearClause := fmt.Sprintf("extract(year from date) = %s", year)
+	if field == "" {
+		return []string{"WHERE " + yearClause}, nil
 	}
-	// Get all the combinations of the first len(fields)-2 fields from the
-	// input table.
-	joinedFields := strings.Join(fields[:len(fields)-2], ", ")
-	selectQuery := "SELECT " + joinedFields +
+	selectQuery := "SELECT " + field +
 		" FROM " + tableName +
-		" GROUP BY " + joinedFields +
-		" ORDER BY " + joinedFields
+		" WHERE " + yearClause +
+		" GROUP BY " + field +
+		" ORDER BY " + field
 	q := gen.bqClient.Query(selectQuery)
 	it, err := q.Read(ctx)
 	if err != nil {
 		log.Print(err)
 		return nil, err
 	}
-	// Generate the complete where clause for each result.
-	var results []string
+	// Generate the complete where clause for each query.
+	var clauses []string
 	for {
 		var row bqRow
 		err := it.Next(&row)
@@ -319,12 +330,63 @@ func (gen *JSONExporter) generateWhereClauses(ctx context.Context, tableName str
 		if err != nil {
 			return nil, err
 		}
-		clauses := []string{}
 		for k, v := range row {
 			clauses = append(clauses, fmt.Sprintf("%s = \"%s\"", k, v))
 		}
-		log.Printf("WHERE " + strings.Join(clauses, " AND "))
-		results = append(results, fmt.Sprintf("WHERE "+strings.Join(clauses, " AND ")))
 	}
+
+	// Groups clauses into batchSize-sized OR clauses. This allows to handle
+	// cases where the shard key would generate too many WHERE clauses, by
+	// making each query return a union of results from multiple clauses.
+	// e.g. for continent_code and batchSize = 7, we get a single WHERE
+	// including all the continents:
+	//
+	// WHERE extract(year from date) = 2020 AND (continent_code = "AF" OR
+	// continent_code = "AN" OR ...)
+	//
+	// The code for batching is adapted from:
+	// https://github.com/golang/go/wiki/SliceTricks#batching-with-minimal-allocation
+	if batchSize == 0 {
+		batchSize = 1
+	}
+	results := make([]string, 0, (len(clauses)+batchSize-1)/batchSize)
+	for batchSize < len(clauses) {
+		clausesUnion := strings.Join(clauses[0:batchSize:batchSize], " OR ")
+		clauses, results = clauses[batchSize:], append(results,
+			fmt.Sprintf("WHERE %s AND (%s)", yearClause, clausesUnion))
+	}
+	clausesUnion := strings.Join(clauses, " OR ")
+	results = append(results, fmt.Sprintf("WHERE %s AND (%s)", yearClause, clausesUnion))
+
 	return results, nil
+}
+
+func printStats(ctx context.Context, ulQueueLen *int32, queriesDone *int32, totQueries int,
+	results <-chan UploadResult) {
+	uploaded := 0
+	errors := 0
+	start := time.Now()
+	lastUpdate := start
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case res := <-results:
+			if res.err != nil {
+				errors++
+			} else {
+				uploaded++
+			}
+		default:
+			if time.Since(lastUpdate) > 200*time.Millisecond {
+				log.Printf(
+					"Elapsed: %s, queries: %d/%d, uploaded: %d (%d errors), files/s: %f, UL queue: %d",
+					time.Since(start).Round(time.Second).String(),
+					atomic.LoadInt32(queriesDone), totQueries, uploaded,
+					errors, float64(uploaded)/time.Since(start).Seconds(),
+					atomic.LoadInt32(ulQueueLen))
+				lastUpdate = time.Now()
+			}
+		}
+	}
 }

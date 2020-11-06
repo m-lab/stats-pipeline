@@ -20,7 +20,6 @@ dl_per_location_cleaned AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     mbps,
@@ -29,7 +28,6 @@ dl_per_location_cleaned AS (
   WHERE
     continent_code IS NOT NULL AND continent_code != ""
     AND country_code IS NOT NULL AND country_code != ""
-    AND country_name IS NOT NULL AND country_name != ""
     AND ISO3166_2region1 IS NOT NULL AND ISO3166_2region1 != ""
     AND city IS NOT NULL AND city != ""
     AND ip IS NOT NULL
@@ -40,7 +38,6 @@ dl_stats_perip_perday AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     ip,
@@ -51,7 +48,7 @@ dl_stats_perip_perday AS (
     APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)] AS download_Q75,
     MAX(mbps) AS download_MAX
   FROM dl_per_location_cleaned
-  GROUP BY date, continent_code, country_code, country_name, ISO3166_2region1, city, ip
+  GROUP BY date, continent_code, country_code, ISO3166_2region1, city, ip
 ),
 # Calculate final stats per day from 1x test per ip per day normalization in prev. step
 dl_stats_per_day AS (
@@ -59,7 +56,6 @@ dl_stats_per_day AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     MIN(download_MIN) AS download_MIN,
@@ -70,7 +66,7 @@ dl_stats_per_day AS (
     MAX(download_MAX) AS download_MAX
   FROM
     dl_stats_perip_perday
-  GROUP BY date, continent_code, country_code, country_name, ISO3166_2region1, city
+  GROUP BY date, continent_code, country_code, ISO3166_2region1, city
 ),
 dl_total_samples_per_geo AS (
   SELECT
@@ -78,11 +74,10 @@ dl_total_samples_per_geo AS (
     COUNT(*) AS dl_total_samples,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city
   FROM dl_per_location_cleaned
-  GROUP BY date, continent_code, country_code, country_name, ISO3166_2region1, city
+  GROUP BY date, continent_code, country_code, ISO3166_2region1, city
 ),
 # Now generate daily histograms of Max DL Maximum measured value per IP, per day
 max_dl_per_day_ip AS (
@@ -90,7 +85,6 @@ max_dl_per_day_ip AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     ip,
@@ -100,7 +94,6 @@ max_dl_per_day_ip AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     ip
@@ -111,7 +104,6 @@ dl_sample_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     COUNT(*) AS samples
@@ -120,7 +112,6 @@ dl_sample_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city
 ),
@@ -135,7 +126,6 @@ dl_histogram_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     bucket_left AS bucket_min,
@@ -146,7 +136,6 @@ dl_histogram_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     bucket_min,
@@ -158,7 +147,6 @@ dl_histogram AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     bucket_min,
@@ -167,7 +155,7 @@ dl_histogram AS (
     samples AS dl_samples
   FROM dl_histogram_counts
   JOIN dl_sample_counts USING (date, continent_code, country_code,
-                            country_name, ISO3166_2region1, city)
+                            ISO3166_2region1, city)
 ),
 # Repeat for Upload tests
 # Select the initial set of upload results
@@ -176,7 +164,6 @@ ul_per_location AS (
     date,
     client.Geo.continent_code AS continent_code,
     client.Geo.country_code AS country_code,
-    client.Geo.country_name AS country_name,
     CONCAT(client.Geo.country_code, '-', client.Geo.region) AS ISO3166_2region1,
     client.Geo.city AS city,
     a.MeanThroughputMbps AS mbps,
@@ -191,7 +178,6 @@ ul_per_location_cleaned AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     mbps,
@@ -200,7 +186,6 @@ ul_per_location_cleaned AS (
   WHERE
     continent_code IS NOT NULL AND continent_code != ""
     AND country_code IS NOT NULL AND country_code != ""
-    AND country_name IS NOT NULL AND country_name != ""
     AND ISO3166_2region1 IS NOT NULL AND ISO3166_2region1 != ""
     AND city IS NOT NULL AND city != ""
     AND ip IS NOT NULL
@@ -211,7 +196,6 @@ ul_stats_perip_perday AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     ip,
@@ -222,7 +206,7 @@ ul_stats_perip_perday AS (
     APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)] AS upload_Q75,
     MAX(mbps) AS upload_MAX
   FROM dl_per_location_cleaned
-  GROUP BY date, continent_code, country_code, country_name, ISO3166_2region1, city, ip
+  GROUP BY date, continent_code, country_code, ISO3166_2region1, city, ip
 ),
 # Calculate final stats per day from 1x test per ip per day normalization in prev. step
 ul_stats_per_day AS (
@@ -230,7 +214,6 @@ ul_stats_per_day AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     MIN(upload_MIN) AS upload_MIN,
@@ -241,7 +224,7 @@ ul_stats_per_day AS (
     MAX(upload_MAX) AS upload_MAX
   FROM
     ul_stats_perip_perday
-  GROUP BY date, continent_code, country_code, country_name, ISO3166_2region1, city
+  GROUP BY date, continent_code, country_code, ISO3166_2region1, city
 ),
 ul_total_samples_per_geo AS (
   SELECT
@@ -249,11 +232,10 @@ ul_total_samples_per_geo AS (
     COUNT(*) AS ul_total_samples,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city
   FROM ul_per_location_cleaned
-  GROUP BY date, continent_code, country_code, country_name, ISO3166_2region1, city
+  GROUP BY date, continent_code, country_code, ISO3166_2region1, city
 ),
 # Now generate daily histograms of Max DL Maximum measured value per IP, per day
 max_ul_per_day_ip AS (
@@ -261,7 +243,6 @@ max_ul_per_day_ip AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     ip,
@@ -271,7 +252,6 @@ max_ul_per_day_ip AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     ip
@@ -282,7 +262,6 @@ ul_sample_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     COUNT(*) AS samples
@@ -291,7 +270,6 @@ ul_sample_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city
 ),
@@ -301,7 +279,6 @@ ul_histogram_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     bucket_left AS bucket_min,
@@ -312,7 +289,6 @@ ul_histogram_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     bucket_min,
@@ -324,7 +300,6 @@ ul_histogram AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ISO3166_2region1,
     city,
     bucket_min,
@@ -333,13 +308,13 @@ ul_histogram AS (
     samples AS ul_samples
   FROM ul_histogram_counts
   JOIN ul_sample_counts USING (date, continent_code, country_code,
-                            country_name, ISO3166_2region1, city)
+                            ISO3166_2region1, city)
 )
 
 # Show the results
 SELECT * FROM dl_histogram
-JOIN ul_histogram USING (date, continent_code, country_code, country_name, ISO3166_2region1, city, bucket_min, bucket_max)
-JOIN dl_stats_per_day USING (date, continent_code, country_code, country_name, ISO3166_2region1, city)
-JOIN dl_total_samples_per_geo USING (date, continent_code, country_code, country_name, ISO3166_2region1, city)
-JOIN ul_stats_per_day USING (date, continent_code, country_code, country_name, ISO3166_2region1, city)
-JOIN ul_total_samples_per_geo USING (date, continent_code, country_code, country_name, ISO3166_2region1, city)
+JOIN ul_histogram USING (date, continent_code, country_code, ISO3166_2region1, city, bucket_min, bucket_max)
+JOIN dl_stats_per_day USING (date, continent_code, country_code, ISO3166_2region1, city)
+JOIN dl_total_samples_per_geo USING (date, continent_code, country_code, ISO3166_2region1, city)
+JOIN ul_stats_per_day USING (date, continent_code, country_code, ISO3166_2region1, city)
+JOIN ul_total_samples_per_geo USING (date, continent_code, country_code, ISO3166_2region1, city)

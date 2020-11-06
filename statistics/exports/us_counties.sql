@@ -1,29 +1,4 @@
-SELECT GEOID, EXTRACT(YEAR from date) as year, ARRAY_AGG(
-    struct(
-        date,
-        state,
-        county_name,
-        bucket_min,
-        bucket_max,
-        dl_frac,
-        dl_samples,
-        ul_frac,
-        ul_samples,
-        download_MIN,
-        download_Q25,
-        download_MED,
-        download_AVG,
-        download_Q75,
-        download_MAX,
-        dl_total_samples,
-        upload_MIN,
-        upload_Q25,
-        upload_MED,
-        upload_AVG,
-        upload_Q75,
-        upload_MAX,
-        ul_total_samples
-    ) order by date) as histograms
+SELECT *, EXTRACT(YEAR from date) as year
 FROM {{ .sourceTable }}
 {{ .whereClause }}
-GROUP BY GEOID, year
+ORDER BY GEOID, date

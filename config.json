@@ -1,10 +1,5 @@
 {
     "histograms": {
-        "regions": {
-            "queryFile": "statistics/queries/continent_country_region_histogram.sql",
-            "dataset": "statistics",
-            "table": "regions"
-        },
         "continents": {
             "queryFile": "statistics/queries/continent_histogram.sql",
             "dataset": "statistics",
@@ -15,6 +10,16 @@
             "dataset": "statistics",
             "table": "countries"
         },
+        "regions": {
+            "queryFile": "statistics/queries/continent_country_region_histogram.sql",
+            "dataset": "statistics",
+            "table": "regions"
+        },
+        "cities": {
+            "queryFile": "statistics/queries/continent_country_region_city_histogram.sql",
+            "dataset": "statistics",
+            "table": "cities"
+        },
         "tracts": {
             "queryFile": "statistics/queries/us_census_tracts_histogram.sql",
             "dataset": "statistics",
@@ -24,19 +29,9 @@
             "queryFile": "statistics/queries/us_county_histogram.sql",
             "dataset": "statistics",
             "table": "counties"
-        },
-        "cities": {
-            "queryFile": "statistics/queries/continent_country_region_city_histogram.sql",
-            "dataset": "statistics",
-            "table": "cities"
         }
     },
     "exports": {
-        "regions": {
-            "sourceTable": "mlab-sandbox.statistics.regions",
-            "queryFile": "statistics/exports/regions.sql",
-            "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .year }}/histogram_daily_stats.json"
-        },
         "continents": {
             "sourceTable": "mlab-sandbox.statistics.continents",
             "queryFile": "statistics/exports/continents.sql",
@@ -45,22 +40,34 @@
         "countries": {
             "sourceTable": "mlab-sandbox.statistics.countries",
             "queryFile": "statistics/exports/countries.sql",
-            "outputPath":"v0/{{ .continent_code }}/{{ .country_code }}/{{ .year }}/histogram_daily_stats.json"
+            "outputPath":"v0/{{ .continent_code }}/{{ .country_code }}/{{ .year }}/histogram_daily_stats.json",
+            "shardKey": "continent_code"
         },
-        "tracts": {
-            "sourceTable": "mlab-sandbox.statistics.tracts",
-            "queryFile": "statistics/exports/us_tracts.sql",
-            "outputPath": "v0/NA/US/tracts/{{ .GEOID }}/{{ .year }}/histogram_daily_stats.json"
-        },
-        "counties": {
-            "sourceTable": "mlab-sandbox.statistics.counties",
-            "queryFile": "statistics/exports/us_counties.sql",
-            "outputPath": "v0/NA/US/counties/{{ .GEOID }}/{{ .year }}/histogram_daily_stats.json"
+        "regions": {
+            "sourceTable": "mlab-sandbox.statistics.regions",
+            "queryFile": "statistics/exports/regions.sql",
+            "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .year }}/histogram_daily_stats.json",
+            "shardKey": "country_code"
         },
         "cities": {
             "sourceTable": "mlab-sandbox.statistics.cities",
             "queryFile": "statistics/exports/cities.sql",
-            "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .city }}/{{ .year }}/histogram_daily_stats.json"
+            "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .city }}/{{ .year }}/histogram_daily_stats.json",
+            "shardKey": "ISO3166_2region1"
+        },
+        "tracts": {
+            "sourceTable": "mlab-sandbox.statistics.tracts",
+            "queryFile": "statistics/exports/us_tracts.sql",
+            "outputPath": "v0/NA/US/tracts/{{ .GEOID }}/{{ .year }}/histogram_daily_stats.json",
+            "shardKey": "GEOID",
+            "batchSize": 10
+        },
+        "counties": {
+            "sourceTable": "mlab-sandbox.statistics.counties",
+            "queryFile": "statistics/exports/us_counties.sql",
+            "outputPath": "v0/NA/US/counties/{{ .GEOID }}/{{ .year }}/histogram_daily_stats.json",
+            "shardKey": "GEOID",
+            "batchSize": 10
         }
     }
 }

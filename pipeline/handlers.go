@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
+	"github.com/m-lab/stats-pipeline/config"
 	"github.com/m-lab/stats-pipeline/exporter"
 	"github.com/m-lab/stats-pipeline/histogram"
 )
@@ -18,11 +19,11 @@ const dateFormat = "2006-01-02"
 type Handler struct {
 	bqClient bqiface.Client
 	exporter *exporter.JSONExporter
-	config   Config
+	config   config.Config
 }
 
 func NewHandler(bqClient bqiface.Client, exporter *exporter.JSONExporter,
-	config Config) *Handler {
+	config config.Config) *Handler {
 	return &Handler{
 		bqClient: bqClient,
 		exporter: exporter,
@@ -75,13 +76,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Option("missingkey=zero").Parse(string(content)))
 		outputTpl := template.Must(template.New(name).Parse(config.OutputPath))
 
-		h.exporter.Export(r.Context(), config.SourceTable, selectTpl,
-			outputTpl)
+		h.exporter.Export(r.Context(), config, config.SourceTable, selectTpl,
+			outputTpl, year)
 	}
 }
 
 func (h *Handler) generateHistogramForYear(ctx context.Context,
-	config HistogramConfig, year string) error {
+	config config.HistogramConfig, year string) error {
 	content, err := ioutil.ReadFile(config.QueryFile)
 	if err != nil {
 		return err

@@ -51,7 +51,6 @@ dl_stats_per_day AS (
     date,
     continent_code,
     country_code,
-    country_name,
     MIN(download_MIN) AS download_MIN,
     APPROX_QUANTILES(download_Q25, 100) [SAFE_ORDINAL(25)] AS download_Q25,
     APPROX_QUANTILES(download_MED, 100) [SAFE_ORDINAL(50)] AS download_MED,
@@ -60,7 +59,7 @@ dl_stats_per_day AS (
     MAX(download_MAX) AS download_MAX
   FROM
     dl_stats_perip_perday
-  GROUP BY date, continent_code, country_code, country_name
+  GROUP BY date, continent_code, country_code
 ),
 dl_total_samples_per_geo AS (
   SELECT
@@ -68,9 +67,8 @@ dl_total_samples_per_geo AS (
     COUNT(*) AS dl_total_samples,
     continent_code,
     country_code,
-    country_name
   FROM dl_per_location_cleaned
-  GROUP BY date, continent_code, country_code, country_name
+  GROUP BY date, continent_code, country_code
 ),
 # Now generate daily histograms of Max DL
 max_dl_per_day_ip AS (
@@ -78,7 +76,6 @@ max_dl_per_day_ip AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ip,
     MAX(mbps) AS mbps
   FROM dl_per_location_cleaned
@@ -86,7 +83,6 @@ max_dl_per_day_ip AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ip
 ),
 # Count the samples
@@ -95,14 +91,12 @@ dl_sample_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     COUNT(*) AS samples
   FROM max_dl_per_day_ip
   GROUP BY
     date,
     continent_code,
-    country_code,
-    country_name
+    country_code
 ),
 # Generate equal sized buckets in log-space
 buckets AS (
@@ -115,7 +109,6 @@ dl_histogram_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     bucket_left AS bucket_min,
     bucket_right AS bucket_max,
     COUNTIF(mbps < bucket_right AND mbps >= bucket_left) AS bucket_count
@@ -124,7 +117,6 @@ dl_histogram_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     bucket_min,
     bucket_max
 ),
@@ -134,13 +126,12 @@ dl_histogram AS (
     date,
     continent_code,
     country_code,
-    country_name,
     bucket_min,
     bucket_max,
     bucket_count / samples AS dl_frac,
     samples AS dl_samples
   FROM dl_histogram_counts
-  JOIN dl_sample_counts USING (date, continent_code, country_code, country_name)
+  JOIN dl_sample_counts USING (date, continent_code, country_code)
 ),
 # Repeat for Upload tests
 # Select the initial set of upload results
@@ -149,7 +140,6 @@ ul_per_location AS (
     date,
     client.Geo.continent_code AS continent_code,
     client.Geo.country_code AS country_code,
-    client.Geo.country_name AS country_name,
     a.MeanThroughputMbps AS mbps,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip
   FROM `measurement-lab.ndt.unified_uploads`
@@ -162,14 +152,12 @@ ul_per_location_cleaned AS (
     date,
     continent_code,
     country_code,
-    country_name,
     mbps,
     ip
   FROM ul_per_location
   WHERE
     continent_code IS NOT NULL AND continent_code != ""
     AND country_code IS NOT NULL AND country_code != ""
-    AND country_name IS NOT NULL AND country_name != ""
     AND ip IS NOT NULL
 ),
 # Gather descriptive statistics per geo, day, per ip
@@ -178,7 +166,6 @@ ul_stats_perip_perday AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ip,
     MIN(mbps) AS upload_MIN,
     APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
@@ -187,7 +174,7 @@ ul_stats_perip_perday AS (
     APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)] AS upload_Q75,
     MAX(mbps) AS upload_MAX
   FROM ul_per_location_cleaned
-  GROUP BY date, continent_code, country_code, country_name, ip
+  GROUP BY date, continent_code, country_code, ip
 ),
 # Calculate final stats per day from 1x test per ip per day normalization in prev. step
 ul_stats_per_day AS (
@@ -195,7 +182,6 @@ ul_stats_per_day AS (
     date,
     continent_code,
     country_code,
-    country_name,
     MIN(upload_MIN) AS upload_MIN,
     APPROX_QUANTILES(upload_Q25, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
     APPROX_QUANTILES(upload_MED, 100) [SAFE_ORDINAL(50)] AS upload_MED,
@@ -204,17 +190,16 @@ ul_stats_per_day AS (
     MAX(upload_MAX) AS upload_MAX
   FROM
     ul_stats_perip_perday
-  GROUP BY date, continent_code, country_code, country_name
+  GROUP BY date, continent_code, country_code
 ),
 ul_total_samples_per_geo AS (
   SELECT
     date,
     COUNT(*) AS ul_total_samples,
     continent_code,
-    country_code,
-    country_name
+    country_code
   FROM ul_per_location_cleaned
-  GROUP BY date, continent_code, country_code, country_name
+  GROUP BY date, continent_code, country_code
 ),
 # Now generate daily histograms of Max UL
 max_ul_per_day_ip AS (
@@ -222,7 +207,6 @@ max_ul_per_day_ip AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ip,
     MAX(mbps) AS mbps
   FROM ul_per_location_cleaned
@@ -230,7 +214,6 @@ max_ul_per_day_ip AS (
     date,
     continent_code,
     country_code,
-    country_name,
     ip
 ),
 # Count the samples
@@ -239,14 +222,12 @@ ul_sample_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     COUNT(*) AS samples
   FROM max_ul_per_day_ip
   GROUP BY
     date,
     continent_code,
-    country_code,
-    country_name
+    country_code
 ),
 # Count the samples that fall into each bucket
 ul_histogram_counts AS (
@@ -254,7 +235,6 @@ ul_histogram_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     bucket_left AS bucket_min,
     bucket_right AS bucket_max,
     COUNTIF(mbps < bucket_right AND mbps >= bucket_left) AS bucket_count
@@ -263,7 +243,6 @@ ul_histogram_counts AS (
     date,
     continent_code,
     country_code,
-    country_name,
     bucket_min,
     bucket_max
 ),
@@ -273,19 +252,18 @@ ul_histogram AS (
     date,
     continent_code,
     country_code,
-    country_name,
     bucket_min,
     bucket_max,
     bucket_count / samples AS ul_frac,
     samples AS ul_samples
   FROM ul_histogram_counts
-  JOIN ul_sample_counts USING (date, continent_code, country_code, country_name)
+  JOIN ul_sample_counts USING (date, continent_code, country_code)
 )
 # Show the results
 SELECT * FROM dl_histogram
-JOIN ul_histogram USING (date, continent_code, country_code, country_name, bucket_min, bucket_max)
-JOIN dl_stats_per_day USING (date, continent_code, country_code, country_name)
-JOIN dl_total_samples_per_geo USING (date, continent_code, country_code, country_name)
-JOIN ul_stats_per_day USING (date, continent_code, country_code, country_name)
-JOIN ul_total_samples_per_geo USING (date, continent_code, country_code, country_name)
-ORDER BY date, continent_code, country_code, country_name, bucket_min, bucket_max
+JOIN ul_histogram USING (date, continent_code, country_code, bucket_min, bucket_max)
+JOIN dl_stats_per_day USING (date, continent_code, country_code)
+JOIN dl_total_samples_per_geo USING (date, continent_code, country_code)
+JOIN ul_stats_per_day USING (date, continent_code, country_code)
+JOIN ul_total_samples_per_geo USING (date, continent_code, country_code)
+ORDER BY date, continent_code, country_code, bucket_min, bucket_max

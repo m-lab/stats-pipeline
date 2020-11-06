@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"runtime"
 
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/storage"
@@ -15,6 +16,7 @@ import (
 	"github.com/m-lab/go/httpx"
 	"github.com/m-lab/go/prometheusx"
 	"github.com/m-lab/go/rtx"
+	"github.com/m-lab/stats-pipeline/config"
 	"github.com/m-lab/stats-pipeline/exporter"
 	"github.com/m-lab/stats-pipeline/pipeline"
 )
@@ -52,7 +54,7 @@ func main() {
 	rtx.Must(flagx.ArgsFromEnv(flag.CommandLine), "Could not parse env args")
 
 	// Try parsing provided config file.
-	var config pipeline.Config
+	var config config.Config
 	err := json.Unmarshal(configFile.Get(), &config)
 	rtx.Must(err, "cannot parse configuration file")
 
@@ -72,6 +74,8 @@ func main() {
 	// Initialize mux.
 	mux := http.NewServeMux()
 	mux.Handle("/v1/pipeline", pipelineHandler)
+
+	log.Printf("GOMAXPROCS is %d", runtime.GOMAXPROCS(0))
 
 	// Start main HTTP server.
 	s := makeHTTPServer(listenAddr, mux)
