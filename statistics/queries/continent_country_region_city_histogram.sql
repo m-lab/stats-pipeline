@@ -10,7 +10,6 @@ dl_per_location AS (
     date,
     client.Geo.continent_code AS continent_code,
     client.Geo.country_code AS country_code,
-    client.Geo.country_name AS country_name,
     CONCAT(client.Geo.country_code, '-', client.Geo.region) AS ISO3166_2region1,
     client.Geo.city AS city,
     a.MeanThroughputMbps AS mbps,
