@@ -1,5 +1,10 @@
 #standardSQL
 WITH
+# Generate equal sized buckets in log-space between near 0 and 10Gbps
+buckets AS (
+  SELECT POW(10, x-.2) AS bucket_left, POW(10,x) AS bucket_right
+  FROM UNNEST(GENERATE_ARRAY(-5, 4.2, .2)) AS x
+),
 tracts AS (
   SELECT
     state_name,
@@ -83,7 +88,9 @@ dl_stats_perday AS (
     lsad_name,
     GEOID
 ),
-dl_total_samples_pergeo_perday AS (
+# Count the difference in the number of tests from the same IPs on the same
+#   day, to the number of tests used in the daily statistics.
+dl_samples_total AS (
   SELECT
     date,
     COUNT(*) AS dl_total_samples,
@@ -100,6 +107,49 @@ dl_total_samples_pergeo_perday AS (
     tract_name,
     lsad_name,
     GEOID
+),
+dl_samples_stats AS (
+  SELECT
+    COUNT(*) AS dl_stats_samples,
+    date,
+    state,
+    state_name,
+    tract_name,
+    lsad_name,
+    GEOID
+  FROM dl_stats_perip_perday
+  GROUP BY
+    date,
+    state,
+    state_name,
+    tract_name,
+    lsad_name,
+    GEOID
+),
+# Count the samples that fall into each bucket and get frequencies
+dl_histogram AS (
+  SELECT
+    date,
+    state,
+    state_name,
+    tract_name,
+    lsad_name,
+    GEOID,
+    bucket_left AS bucket_min,
+    bucket_right AS bucket_max,
+    COUNTIF(download_MAX < bucket_right AND download_MAX >= bucket_left) AS dl_samples_bucket,
+    COUNT(*) AS dl_samples_day,
+    COUNTIF(download_MAX < bucket_right AND download_MAX >= bucket_left) / COUNT(*) AS dl_frac
+  FROM dl_stats_perip_perday CROSS JOIN buckets
+  GROUP BY
+    date,
+    state,
+    state_name,
+    tract_name,
+    lsad_name,
+    GEOID,
+    bucket_min,
+    bucket_max
 ),
 #############
 ul AS (
@@ -175,7 +225,7 @@ ul_stats_perday AS (
     lsad_name,
     GEOID
 ),
-ul_total_samples_pergeo_perday AS (
+ul_samples_total AS (
   SELECT
     date,
     COUNT(*) AS ul_total_samples,
@@ -193,47 +243,16 @@ ul_total_samples_pergeo_perday AS (
     lsad_name,
     GEOID
 ),
-# Now generate the daily histograms of the Maximum measured download speed, per IP, per day.
-
-# First, select the MAX download metric and geo fields from the original cleaned data.
-max_dl_per_day_ip AS (
+ul_samples_stats AS (
   SELECT
+    COUNT(*) AS ul_stats_samples,
     date,
     state,
     state_name,
     tract_name,
     lsad_name,
-    GEOID,
-    ip,
-    MAX(mbps) AS download_MAX
-  FROM dl
-  GROUP BY
-    date,
-    state,
-    state_name,
-    tract_name,
-    lsad_name,
-    GEOID,
-    ip
-),
-# Count the samples for the daily histogram of Max dowload tests.
-#   The counts here are drawn from: dl_stats_perip_perday > max_dl_per_day_ip
-#   and therefore represent the **one** MAX download value per IP on that day.
-#
-#   This count is different from "dl_total_samples_pergeo_perday" because the
-#   histogram is meant to communicate the number of **testers** who could or could
-#   not reach specific bucket thresholds, while dl_total_samples_pergeo_perday
-#   is the count of **all tests** from all IPs in the sample on that day.
-dl_sample_counts AS (
-  SELECT
-    date,
-    state,
-    state_name,
-    tract_name,
-    lsad_name,
-    GEOID,
-    COUNT(*) AS samples
-  FROM max_dl_per_day_ip
+    GEOID
+  FROM ul_stats_perip_perday
   GROUP BY
     date,
     state,
@@ -242,116 +261,7 @@ dl_sample_counts AS (
     lsad_name,
     GEOID
 ),
-# Generate equal sized buckets in log-space. This returns 21 buckets pergeo perday from 0.63 to 10000.
-# Five steps per logarithmic decade, from 0.63 to 10000, i.e. 0.63, 1.0, 1.58, 2.51, 3.98, 6.30, 10.0, ...
-
-buckets AS (
-  SELECT POW(10, x-.2) AS bucket_left, POW(10,x) AS bucket_right
-  FROM UNNEST(GENERATE_ARRAY(-5, 4.2, .2)) AS x
-),
-# Count the samples that fall into each bucket
-dl_histogram_counts AS (
-  SELECT
-    date,
-    state,
-    state_name,
-    tract_name,
-    lsad_name,
-    GEOID,
-    bucket_left AS bucket_min,
-    bucket_right AS bucket_max,
-    COUNTIF(download_MAX BETWEEN bucket_left AND bucket_right) AS bucket_count
-  FROM max_dl_per_day_ip CROSS JOIN buckets
-  GROUP BY
-    date,
-    state,
-    state_name,
-    tract_name,
-    lsad_name,
-    GEOID,
-    bucket_min,
-    bucket_max
-),
-# Turn the counts into frequencies
-dl_histogram AS (
-  SELECT
-    date,
-    state,
-    state_name,
-    tract_name,
-    lsad_name,
-    GEOID,
-    bucket_min,
-    bucket_max,
-    bucket_count / samples AS dl_frac,
-    samples AS dl_samples
-  FROM dl_histogram_counts
-  JOIN dl_sample_counts USING (date, state, state_name, tract_name, lsad_name, GEOID)
-),
-# Generate histogram for uploads
-max_ul_per_day_ip AS (
-  SELECT
-    date,
-    state,
-    state_name,
-    tract_name,
-    lsad_name,
-    GEOID,
-    ip,
-    MAX(mbps) AS upload_MAX
-  FROM ul
-  GROUP BY
-    date,
-    state,
-    state_name,
-    tract_name,
-    lsad_name,
-    GEOID,
-    ip
-),
-# Count the samples
-ul_sample_counts AS (
-  SELECT
-    date,
-    state,
-    state_name,
-    tract_name,
-    lsad_name,
-    GEOID,
-    COUNT(*) AS samples
-  FROM max_ul_per_day_ip
-  GROUP BY
-    date,
-    state,
-    state_name,
-    tract_name,
-    lsad_name,
-    GEOID
-),
-# Count the samples that fall into each bucket
-ul_histogram_counts AS (
-  SELECT
-    date,
-    state,
-    state_name,
-    tract_name,
-    lsad_name,
-    GEOID,
-    bucket_left AS bucket_min,
-    bucket_right AS bucket_max,
-    COUNTIF(upload_MAX BETWEEN bucket_left AND bucket_right) AS bucket_count
-  FROM max_ul_per_day_ip CROSS JOIN buckets
-  GROUP BY
-    date,
-    state,
-    state_name,
-    tract_name,
-    lsad_name,
-    GEOID,
-    bucket_min,
-    bucket_max
-),
-# Turn the counts into frequencies
+# Generate the histogram with samples per bucket and frequencies
 ul_histogram AS (
   SELECT
     date,
@@ -360,17 +270,30 @@ ul_histogram AS (
     tract_name,
     lsad_name,
     GEOID,
+    bucket_left AS bucket_min,
+    bucket_right AS bucket_max,
+    COUNTIF(upload_MAX < bucket_right AND upload_MAX >= bucket_left) AS ul_samples_bucket,
+    COUNT(*) AS ul_samples_day,
+    COUNTIF(upload_MAX < bucket_right AND upload_MAX >= bucket_left) / COUNT(*) AS ul_frac
+  FROM ul_stats_perip_perday CROSS JOIN buckets
+  GROUP BY
+    date,
+    state,
+    state_name,
+    tract_name,
+    lsad_name,
+    GEOID,
     bucket_min,
-    bucket_max,
-    bucket_count / samples AS ul_frac,
-    samples AS ul_samples
-  FROM ul_histogram_counts
-  JOIN ul_sample_counts USING (date, state, state_name, tract_name, lsad_name, GEOID)
+    bucket_max
 )
 # Show the results
 SELECT * FROM dl_histogram
 JOIN ul_histogram USING (date, state, state_name, tract_name, lsad_name, GEOID, bucket_min, bucket_max)
 JOIN dl_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
-JOIN dl_total_samples_pergeo_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
 JOIN ul_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
-JOIN ul_total_samples_pergeo_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
+JOIN dl_samples_total USING (date, state, state_name, tract_name, lsad_name, GEOID)
+JOIN ul_samples_total USING (date, state, state_name, tract_name, lsad_name, GEOID)
+JOIN dl_samples_stats USING (date, state, state_name, tract_name, lsad_name, GEOID)
+JOIN ul_samples_stats USING (date, state, state_name, tract_name, lsad_name, GEOID)
+ORDER BY date, state, state_name, tract_name, lsad_name, GEOID
+
