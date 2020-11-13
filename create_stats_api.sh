@@ -28,7 +28,6 @@ if [[ -z "${lb_ip}" ]] ; then
   )
 fi
 
-
 # Lookup or create the backend bucket for the statistics data bucket.
 statistics_backend_name=$(
   gcloud --project ${PROJECT} compute backend-buckets describe \
@@ -41,7 +40,6 @@ if [[ -z "${statistics_backend_name}" ]] ; then
       --gcs-bucket-name ${statistics_bucket} --format='value(name)'
   )
 fi
-
 
 # Create url-map..
 urlmap_name=$(
