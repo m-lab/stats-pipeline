@@ -19,12 +19,12 @@ gsutil cors set cors-settings.json gs://${statistics_bucket}
 # Lookup or create loadbalancer IP.
 lb_ip=$(
   gcloud --project ${PROJECT} compute addresses describe \
-    api-lb-ip --global --format="value(address)" || :
+    statistics-lb-ip --global --format="value(address)" || :
 )
 if [[ -z "${lb_ip}" ]] ; then
   lb_ip=$(
     gcloud --project ${PROJECT} compute addresses create \
-      api-lb-ip --ip-version=IPV4 --global --format="value(address)"
+      statistics-lb-ip --ip-version=IPV4 --global --format="value(address)"
   )
 fi
 
@@ -41,7 +41,7 @@ if [[ -z "${statistics_backend_name}" ]] ; then
   )
 fi
 
-# Create url-map..
+# Create url-map.
 urlmap_name=$(
   gcloud --project ${PROJECT} compute url-maps describe \
     statistics-url-map --format='value(name)' || :
@@ -55,10 +55,10 @@ if [[ -z "${urlmap_name}" ]] ; then
   )
 fi
 
-# Setup DNS for api.<project>.measurementlab.net.
+# Setup DNS for statistics.<project>.measurementlab.net.
 current_ip=$(
   gcloud dns record-sets list --zone "${PROJECT}-measurementlab-net" \
-    --name "api.${PROJECT}.measurementlab.net." \
+    --name "statistics.${PROJECT}.measurementlab.net." \
     --format "value(rrdatas[0])" --project ${PROJECT} || : )
 if [[ "${current_ip}" != "${lb_ip}" ]] ; then
   # Add the record, deleting the existing one first.
@@ -68,13 +68,13 @@ if [[ "${current_ip}" != "${lb_ip}" ]] ; then
   # Allow remove to fail when CURRENT_IP is empty.
   gcloud dns record-sets transaction remove \
     --zone "${PROJECT}-measurementlab-net" \
-    --name "api.${PROJECT}.measurementlab.net." \
+    --name "statistics.${PROJECT}.measurementlab.net." \
     --type A \
     --ttl 300 \
     "${current_ip}" --project ${PROJECT} || :
   gcloud dns record-sets transaction add \
     --zone "${PROJECT}-measurementlab-net" \
-    --name "api.${PROJECT}.measurementlab.net." \
+    --name "statistics.${PROJECT}.measurementlab.net." \
     --type A \
     --ttl 300 \
     "${lb_ip}" \
@@ -82,4 +82,44 @@ if [[ "${current_ip}" != "${lb_ip}" ]] ; then
   gcloud dns record-sets transaction execute \
     --zone "${PROJECT}-measurementlab-net" \
     --project ${PROJECT}
+fi
+
+# Create managed TLS certificates.
+certificate_name=$(
+  gcloud --project ${PROJECT} beta compute ssl-certificates describe \
+    statistics-certificate --format='value(name)' || :
+)
+if [[ -z "${certificate_name}" ]] ; then
+  certificate_name=$(
+    gcloud --project ${PROJECT} beta compute ssl-certificates create \
+      statistics-certificate \
+      --domains statistics.${PROJECT}.measurementlab.net --format='value(name)'
+  )
+fi
+
+# Create the HTTPS target proxy connecting the url-map and managed certificate.
+proxy_name=$(
+  gcloud --project ${PROJECT} compute target-https-proxies describe \
+    statistics-lb-proxy --format='value(name)' || :
+)
+if [[ -z "${proxy_name}" ]] ; then
+  proxy_name=$(
+    gcloud --project ${PROJECT} compute target-https-proxies create \
+      statistics-lb-proxy \
+      --url-map ${urlmap_name} --ssl-certificates ${certificate_name} \
+      --format='value(name)'
+  )
+fi
+
+# Create the forwarding rule connecting our loadbalancer IP to the target proxy.
+forwarder_name=$(
+  gcloud --project ${PROJECT} compute forwarding-rules describe \
+    statistics-forwarder --global --format='value(name)' || :
+)
+if [[ -z "${forwarder_name}" ]] ; then
+  gcloud --project ${PROJECT} compute forwarding-rules create \
+    statistics-forwarder \
+    --address ${lb_ip} --global \
+    --target-https-proxy ${proxy_name} \
+    --ports 443
 fi
