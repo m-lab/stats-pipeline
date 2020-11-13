@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# create_stats_api.sh creates all GCP resources needed to serve the statistics
+# create_statistics_api.sh creates all GCP resources needed to serve the statistics
 # API from a GCS bucket.
 
 set -euxo pipefail
