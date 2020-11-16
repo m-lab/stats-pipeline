@@ -41,6 +41,7 @@ func NewHandler(bqClient bqiface.Client, exporter *exporter.JSONExporter,
 //
 // This endpoint accepts only GET requests.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer log.Print("handler exited")
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -53,6 +54,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// Update all the histogram tables.
 	for name, config := range h.config.Histograms {
+		if r.Context().Err() != nil {
+			// If the request's context has been canceled, we must return here.
+			return
+		}
 		log.Printf("Updating histogram table: %s...", name)
 		err := h.generateHistogramForYear(r.Context(), config, year)
 		if err != nil {
@@ -64,6 +69,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// Export data to GCS.
 	for name, config := range h.config.Exports {
+		if r.Context().Err() != nil {
+			// If the request's context has been canceled, we must return here.
+			return
+		}
 		log.Printf("Exporting %s...", name)
 		// Read query file
 		content, err := ioutil.ReadFile(config.QueryFile)
@@ -74,10 +83,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		selectTpl := template.Must(template.New(name).
 			Option("missingkey=zero").Parse(string(content)))
-		outputTpl := template.Must(template.New(name).Parse(config.OutputPath))
-
-		h.exporter.Export(r.Context(), config, config.SourceTable, selectTpl,
-			outputTpl, year)
+		h.exporter.Export(r.Context(), config, selectTpl, year)
 	}
 }
 
