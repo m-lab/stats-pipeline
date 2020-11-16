@@ -75,11 +75,13 @@ func New(bqClient bqiface.Client, storageClient stiface.Client, bucket string) *
 }
 
 // Export runs the provided SQL query and, for each row in the result, uploads
-// a file to the provided outputPath on GCS. This file contains the JSON
-// representation of the "histograms" field, which must be present on each row.
-// The outputPath is a template whose parameters are provided by the BigQuery
-// row's fields.
-// e.g. if outputPath is "{{ .Year }}/output.json" and we have a row per year,
+// a file to the provided config.OutputPath on GCS. This file contains the JSON
+// representation of the rows.
+// config.OutputPath is a template whose parameters are provided by the BigQuery
+// row's fields. If a field is present in the output path, it's removed from the
+// BigQuery row's JSON representation, to reduce redundancy.
+//
+// e.g. if outputPath is "{{ .year }}/output.json" and we have a row per year,
 // the histograms will be uploaded to:
 // - 2010/output.json
 // - 2020/output.json
@@ -88,7 +90,7 @@ func New(bqClient bqiface.Client, storageClient stiface.Client, bucket string) *
 // If any of the steps (running the query, reading the result, marshalling,
 // uploading) fails, this function returns the corresponding error.
 //
-// Note: outputPath should not start with a "/".
+// Note: config.OutputPath should not start with a "/".
 func (exporter *JSONExporter) Export(ctx context.Context,
 	config config.ExportConfig, queryTpl *template.Template,
 	year string) error {
@@ -164,8 +166,10 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 			atomic.AddInt32(&queriesDone, 1)
 		}
 	}
-	// When all the query goroutines have finished, all the uploadJobs have
-	// been sent already, so we can close the uploadJobs channel and return.
+	// The goroutines' termination is controlled by closing the channels they
+	// work on. The fist WaitGroup makes sure all the query workers have been
+	// terminated before terminating the upload workers. The second one makes
+	// sure all the upload workers have been terminated before returning.
 	close(queryJobs)
 	queryWg.Wait()
 	close(uploadJobs)
@@ -173,30 +177,14 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	return nil
 }
 
-// marshalAndUpload marshals the BigQuery rows into a JSON array and sends a
-// new UploadJob to the uploadJobs channel so the result is uploaded to GCS as
-// objName.
-func (exporter *JSONExporter) marshalAndUpload(objName string, rows []bqRow,
-	uploadJobs chan<- *UploadJob) error {
-	j, err := json.Marshal(rows)
-	if err != nil {
-		return err
-	}
-
-	uploadJobs <- &UploadJob{
-		objName: objName,
-		content: j,
-	}
-	return nil
-}
-
 // queryWorker reads the next available QueryJob from the queryJobs channel and
 // processes the result.
-
+//
 // For each row it generates a row key based on the fields in QueryJob.fields.
 // When the row key changes, it means a file containing the rows read so far
 // is ready to be uploaded, so the rows are marshalled and sent to the
 // uploadJobs channel.
+//
 // NOTE: for this to work correctly, the results MUST be ordered by the fields
 // in queryJob.fields.
 func (exporter *JSONExporter) queryWorker(ctx context.Context,
@@ -233,7 +221,7 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 						break
 					}
 					atomic.AddInt32(uploadCounter, 1)
-					exporter.marshalAndUpload(buf.String(), currentFile, uploadJobs)
+					marshalAndUpload(buf.String(), currentFile, uploadJobs)
 				} else {
 					// If there was an unexpected error while reading the
 					// next row, print the error and return.
@@ -267,7 +255,7 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 					break
 				}
 				atomic.AddInt32(uploadCounter, 1)
-				exporter.marshalAndUpload(buf.String(), currentFile, uploadJobs)
+				marshalAndUpload(buf.String(), currentFile, uploadJobs)
 				// Empty currentFile and set currentRowKey to the new
 				// rowKey.
 				currentFile = currentFile[:0]
@@ -365,6 +353,23 @@ func (exporter *JSONExporter) generateWhereClauses(ctx context.Context,
 	results = append(results, fmt.Sprintf("WHERE %s AND (%s)", yearClause, clausesUnion))
 
 	return results, nil
+}
+
+// marshalAndUpload marshals the BigQuery rows into a JSON array and sends a
+// new UploadJob to the uploadJobs channel so the result is uploaded to GCS as
+// objName.
+func marshalAndUpload(objName string, rows []bqRow,
+	uploadJobs chan<- *UploadJob) error {
+	j, err := json.Marshal(rows)
+	if err != nil {
+		return err
+	}
+
+	uploadJobs <- &UploadJob{
+		objName: objName,
+		content: j,
+	}
+	return nil
 }
 
 // printStats prints statistics about the ongoing export every second.
