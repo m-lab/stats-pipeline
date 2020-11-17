@@ -73,7 +73,7 @@ func main() {
 
 	// Initialize mux.
 	mux := http.NewServeMux()
-	mux.Handle("/v1/pipeline", pipelineHandler)
+	mux.Handle("/v0/pipeline", pipelineHandler)
 
 	log.Printf("GOMAXPROCS is %d", runtime.GOMAXPROCS(0))
 
