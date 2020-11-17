@@ -409,9 +409,6 @@ func getFieldsFromPath(path string) []string {
 	var fields []string
 	matches := fieldRegex.FindAllStringSubmatch(path, -1)
 	for _, m := range matches {
-		if len(m) < 2 {
-			break
-		}
 		fields = append(fields, m[1])
 	}
 	return fields

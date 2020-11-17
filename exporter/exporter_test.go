@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -281,6 +282,7 @@ func TestJSONExporter_marshalAndUpload(t *testing.T) {
 		}
 		close(jobs)
 	}()
+	// We don't expect anything on the channel.
 	if _, ok := <-jobs; ok {
 		t.Errorf("marshalAndUpload() sent an unexpected job after an error")
 	}
@@ -310,5 +312,66 @@ func Test_printStats(t *testing.T) {
 	if !strings.Contains(out.String(), "uploaded: 1") ||
 		!strings.Contains(out.String(), "1 errors") {
 		t.Errorf("printStats() didn't print the expected output")
+	}
+}
+
+func Test_getFieldsFromPath(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want []string
+	}{
+		{
+			name: "ok",
+			path: "{{ .foo }}/{{.bar}}",
+			want: []string{"foo", "bar"},
+		},
+		{
+			name: "no-matches",
+			path: "{{foo}}/{{bar}}",
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := getFieldsFromPath(tt.path); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getFieldsFromPath() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_removeFieldsFromRow(t *testing.T) {
+	fakeRow := bqRow{
+		"test":   "foo",
+		"remove": "this",
+	}
+	tests := []struct {
+		name   string
+		row    bqRow
+		fields []string
+		want   bqRow
+	}{
+		{
+			name:   "ok-field-removed",
+			row:    fakeRow,
+			fields: []string{"remove"},
+			want: bqRow{
+				"test": "foo",
+			},
+		},
+		{
+			name:   "not-found-return-original-row",
+			row:    fakeRow,
+			fields: []string{"non-existing-field"},
+			want:   fakeRow,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := removeFieldsFromRow(tt.row, tt.fields); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("removeFieldsFromRow() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
