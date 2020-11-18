@@ -62,7 +62,6 @@ dl_stats_per_day AS (
     country_code,
     ISO3166_2region1,
     city,
-    COUNT(*) AS download_samples_stats_per_day,
     MIN(download_MIN) AS download_MIN,
     APPROX_QUANTILES(download_Q25, 100) [SAFE_ORDINAL(25)] AS download_Q25,
     APPROX_QUANTILES(download_MED, 100) [SAFE_ORDINAL(50)] AS download_MED,
@@ -91,22 +90,6 @@ dl_samples_total AS (
     ISO3166_2region1,
     city
 ),
-dl_samples_stats AS (
-  SELECT
-    COUNT(*) AS dl_stats_samples,
-    date,
-    continent_code,
-    country_code,
-    ISO3166_2region1,
-    city
-  FROM dl_stats_perip_perday
-  GROUP BY
-    date,
-    continent_code,
-    country_code,
-    ISO3166_2region1,
-    city
-),
 # Count the samples that fall into each bucket and get frequencies
 dl_histogram AS (
   SELECT
@@ -119,7 +102,7 @@ dl_histogram AS (
     bucket_right AS bucket_max,
     COUNTIF(download_MAX < bucket_right AND download_MAX >= bucket_left) AS dl_samples_bucket,
     COUNT(*) AS dl_samples_day,
-    COUNTIF(download_MAX < bucket_right AND download_MAX >= bucket_left) / COUNT(*) AS fl_frac
+    COUNTIF(download_MAX < bucket_right AND download_MAX >= bucket_left) / COUNT(*) AS dl_frac
   FROM dl_stats_perip_perday CROSS JOIN buckets
   GROUP BY
     date,
@@ -189,7 +172,6 @@ ul_stats_per_day AS (
     country_code,
     ISO3166_2region1,
     city,
-    COUNT(*) AS upload_samples_stats_per_day,
     MIN(upload_MIN) AS upload_MIN,
     APPROX_QUANTILES(upload_Q25, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
     APPROX_QUANTILES(upload_MED, 100) [SAFE_ORDINAL(50)] AS upload_MED,
@@ -210,23 +192,6 @@ ul_samples_total AS (
     ISO3166_2region1,
     city
   FROM ul_per_location_cleaned
-  GROUP BY
-    date,
-    continent_code,
-    country_code,
-    ISO3166_2region1,
-    city
-),
-# Show the number of samples used in the statistics (one per IP per day)
-ul_samples_stats AS (
-  SELECT
-    COUNT(*) AS ul_stats_samples,
-    date,
-    continent_code,
-    country_code,
-    ISO3166_2region1,
-    city
-  FROM ul_stats_perip_perday
   GROUP BY
     date,
     continent_code,
@@ -264,5 +229,3 @@ JOIN dl_stats_per_day USING (date, continent_code, country_code, ISO3166_2region
 JOIN ul_stats_per_day USING (date, continent_code, country_code, ISO3166_2region1, city)
 JOIN dl_samples_total USING (date, continent_code, country_code, ISO3166_2region1, city)
 JOIN ul_samples_total USING (date, continent_code, country_code, ISO3166_2region1, city)
-JOIN dl_samples_stats USING (date, continent_code, country_code, ISO3166_2region1, city)
-JOIN ul_samples_stats USING (date, continent_code, country_code, ISO3166_2region1, city)

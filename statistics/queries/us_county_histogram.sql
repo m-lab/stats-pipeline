@@ -88,18 +88,6 @@ dl_samples_total AS (
     state,
     GEOID
 ),
-dl_samples_stats AS (
-  SELECT
-    COUNT(*) AS dl_stats_samples,
-    date,
-    state,
-    GEOID
-  FROM dl_stats_perip_perday
-  GROUP BY
-    date,
-    state,
-    GEOID
-),
 # Count the samples that fall into each bucket and get frequencies
 dl_histogram AS (
   SELECT
@@ -108,9 +96,9 @@ dl_histogram AS (
     GEOID,
     bucket_left AS bucket_min,
     bucket_right AS bucket_max,
-    COUNTIF(download_MAX < bucket_right AND download_MAX >= bucket_left) AS dl_samples_bucket,
+    COUNTIF(download_MED < bucket_right AND download_MED >= bucket_left) AS dl_samples_bucket,
     COUNT(*) AS dl_samples_day,
-    COUNTIF(download_MAX < bucket_right AND download_MAX >= bucket_left) / COUNT(*) AS dl_frac
+    COUNTIF(download_MED < bucket_right AND download_MED >= bucket_left) / COUNT(*) AS dl_frac
   FROM dl_stats_perip_perday CROSS JOIN buckets
   GROUP BY
     date,
@@ -186,18 +174,6 @@ ul_samples_total AS (
     state,
     GEOID
 ),
-ul_samples_stats AS (
-  SELECT
-    COUNT(*) AS ul_stats_samples,
-    date,
-    state,
-    GEOID
-  FROM ul_stats_perip_perday
-  GROUP BY
-    date,
-    state,
-    GEOID
-),
 # Generate the histogram with samples per bucket and frequencies
 ul_histogram AS (
   SELECT
@@ -206,9 +182,9 @@ ul_histogram AS (
     GEOID,
     bucket_left AS bucket_min,
     bucket_right AS bucket_max,
-    COUNTIF(upload_MAX < bucket_right AND upload_MAX >= bucket_left) AS ul_samples_bucket,
+    COUNTIF(upload_MED < bucket_right AND upload_MED >= bucket_left) AS ul_samples_bucket,
     COUNT(*) AS ul_samples_day,
-    COUNTIF(upload_MAX < bucket_right AND upload_MAX >= bucket_left) / COUNT(*) AS ul_frac
+    COUNTIF(upload_MED < bucket_right AND upload_MED >= bucket_left) / COUNT(*) AS ul_frac
   FROM ul_stats_perip_perday CROSS JOIN buckets
   GROUP BY
     date,
@@ -225,5 +201,3 @@ JOIN ul_stats_perday USING (date, state, GEOID)
 JOIN counties_noWKT USING (GEOID)
 JOIN dl_samples_total USING (date, state, GEOID)
 JOIN ul_samples_total USING (date, state, GEOID)
-JOIN dl_samples_stats USING (date, state, GEOID)
-JOIN ul_samples_stats USING (date, state, GEOID)
