@@ -84,11 +84,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				bqClient: tt.bqClient,
-				exporter: tt.exporter,
-				config:   tt.config,
-			}
+			h := NewHandler(tt.bqClient, tt.exporter, tt.config)
 			recorder := httptest.NewRecorder()
 			h.ServeHTTP(recorder, tt.r)
 			statusCode := recorder.Result().StatusCode

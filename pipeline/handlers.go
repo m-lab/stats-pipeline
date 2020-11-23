@@ -15,10 +15,12 @@ import (
 
 const dateFormat = "2006-01-02"
 
-var newHistogramTable = func(name string, ds string,
-	query string, client bqiface.Client) HistogramTable {
-	return histogram.NewTable(name, ds, query, client)
-}
+var (
+	newHistogramTable = func(name string, ds string,
+		query string, client bqiface.Client) HistogramTable {
+		return histogram.NewTable(name, ds, query, client)
+	}
+)
 
 type HistogramTable interface {
 	UpdateHistogram(context.Context, time.Time, time.Time) error
@@ -32,14 +34,19 @@ type Handler struct {
 	bqClient bqiface.Client
 	exporter Exporter
 	config   config.Config
+
+	pipelineCanRun chan bool
 }
 
 func NewHandler(bqClient bqiface.Client, exporter Exporter,
 	config config.Config) *Handler {
+	pipelineCanRun := make(chan bool, 1)
+	pipelineCanRun <- true
 	return &Handler{
-		bqClient: bqClient,
-		exporter: exporter,
-		config:   config,
+		bqClient:       bqClient,
+		exporter:       exporter,
+		config:         config,
+		pipelineCanRun: pipelineCanRun,
 	}
 }
 
@@ -62,6 +69,17 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if year == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Missing parameter: year"))
+		return
+	}
+	select {
+	case <-h.pipelineCanRun:
+		defer func() {
+			// Make sure the pipeline can run again once finished.
+			h.pipelineCanRun <- true
+		}()
+	default:
+		w.WriteHeader(http.StatusConflict)
+		w.Write([]byte("The pipeline is running already."))
 		return
 	}
 	// Update all the histogram tables.
