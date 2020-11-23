@@ -32,9 +32,7 @@ dl AS (
     `measurement-lab.ndt.unified_downloads` tests, counties
   WHERE
     date BETWEEN @startdate AND @enddate
-    AND client.Geo.country_name = "United States"
-    AND client.Geo.country_code IS NOT NULL
-    AND client.Geo.country_code != ""
+    AND client.Geo.country_code = "US"
     AND client.Geo.region IS NOT NULL
     AND client.Geo.region != ""
     AND ST_WITHIN(
@@ -132,9 +130,7 @@ ul AS (
     `measurement-lab.ndt.unified_uploads` tests, counties
   WHERE
     date BETWEEN @startdate AND @enddate
-    AND client.Geo.country_name = "United States"
-    AND client.Geo.country_code IS NOT NULL
-    AND client.Geo.country_code != ""
+    AND client.Geo.country_code = "US"
     AND client.Geo.region IS NOT NULL
     AND client.Geo.region != ""
     AND ST_WITHIN(
