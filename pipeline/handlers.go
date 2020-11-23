@@ -10,19 +10,31 @@ import (
 
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
 	"github.com/m-lab/stats-pipeline/config"
-	"github.com/m-lab/stats-pipeline/exporter"
 	"github.com/m-lab/stats-pipeline/histogram"
 )
 
 const dateFormat = "2006-01-02"
 
+var newHistogramTable = func(name string, ds string,
+	query string, client bqiface.Client) HistogramTable {
+	return histogram.NewTable(name, ds, query, client)
+}
+
+type HistogramTable interface {
+	UpdateHistogram(context.Context, time.Time, time.Time) error
+}
+
+type Exporter interface {
+	Export(context.Context, config.ExportConfig, *template.Template, string) error
+}
+
 type Handler struct {
 	bqClient bqiface.Client
-	exporter *exporter.JSONExporter
+	exporter Exporter
 	config   config.Config
 }
 
-func NewHandler(bqClient bqiface.Client, exporter *exporter.JSONExporter,
+func NewHandler(bqClient bqiface.Client, exporter Exporter,
 	config config.Config) *Handler {
 	return &Handler{
 		bqClient: bqClient,
@@ -39,10 +51,10 @@ func NewHandler(bqClient bqiface.Client, exporter *exporter.JSONExporter,
 // The querystring parameters are:
 // - year (mandatory): the year to generate statistics for.
 //
-// This endpoint accepts only GET requests.
+// This endpoint accepts only POST requests.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer log.Print("handler exited")
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -93,7 +105,7 @@ func (h *Handler) generateHistogramForYear(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	hist := histogram.NewTable(config.Table, config.Dataset, string(content),
+	hist := newHistogramTable(config.Table, config.Dataset, string(content),
 		h.bqClient)
 	start, err := time.Parse(dateFormat, year+"-01-01")
 	if err != nil {
