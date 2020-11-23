@@ -106,4 +106,8 @@ func TestNewHandler(t *testing.T) {
 	if h.bqClient != mc || h.exporter != me || !reflect.DeepEqual(h.config, config) {
 		t.Errorf("NewHandler() didn't return the expected handler")
 	}
+	// Check we can read from the channel.
+	if _, ok := <-h.pipelineCanRun; !ok {
+		t.Errorf("NewHandler() didn't return a properly initialized handler.")
+	}
 }
