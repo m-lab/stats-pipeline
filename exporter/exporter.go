@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"text/template"
@@ -19,6 +19,8 @@ import (
 	"github.com/googleapis/google-cloud-go-testing/storage/stiface"
 	"github.com/m-lab/go/uploader"
 	"github.com/m-lab/stats-pipeline/config"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/api/iterator"
 )
 
@@ -33,7 +35,29 @@ const (
 	nUploadWorkers = 25
 )
 
-var fieldRegex = regexp.MustCompile(`{{\s*\.([A-Za-z0-9_]+)\s*}}`)
+var (
+	fieldRegex           = regexp.MustCompile(`{{\s*\.([A-Za-z0-9_]+)\s*}}`)
+	bytesProcessedMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "stats_pipeline_exporter_bytes_processed_total",
+		Help: "Bytes processed by the exporter",
+	}, []string{
+		"table",
+	})
+
+	cacheHitMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "stats_pipeline_exporter_cache_hit_total",
+		Help: "Number of cache hits",
+	}, []string{
+		"table",
+	})
+
+	uploadedBytesMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "stats_pipeline_exporter_uploaded_bytes_total",
+		Help: "Bytes uploaded to GCS",
+	}, []string{
+		"table",
+	})
+)
 
 // Convenience type for a bigquery row.
 type bqRow = map[string]bigquery.Value
@@ -43,11 +67,13 @@ type JSONExporter struct {
 	bqClient      bqiface.Client
 	storageClient stiface.Client
 
-	bucket string
+	bucket    string
+	projectID string
 }
 
 // UploadJob is a job for uploading data to a GCS bucket.
 type UploadJob struct {
+	table   string
 	objName string
 	content []byte
 }
@@ -60,16 +86,19 @@ type UploadResult struct {
 
 // QueryJob is a job for running queries on BQ.
 type QueryJob struct {
+	name       string
 	query      string
 	fields     []string
 	outputPath *template.Template
 }
 
 // New creates a new JSONExporter.
-func New(bqClient bqiface.Client, storageClient stiface.Client, bucket string) *JSONExporter {
+func New(bqClient bqiface.Client, storageClient stiface.Client, projectID,
+	bucket string) *JSONExporter {
 	return &JSONExporter{
 		bqClient:      bqClient,
 		storageClient: storageClient,
+		projectID:     projectID,
 		bucket:        bucket,
 	}
 }
@@ -92,7 +121,7 @@ func New(bqClient bqiface.Client, storageClient stiface.Client, bucket string) *
 //
 // Note: config.OutputPath should not start with a "/".
 func (exporter *JSONExporter) Export(ctx context.Context,
-	config config.ExportConfig, queryTpl *template.Template,
+	config config.Config, queryTpl *template.Template,
 	year string) error {
 
 	// Retrieve list of fields from the output path template string.
@@ -105,8 +134,12 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 		return err
 	}
 
+	// The fully qualified name for a table is project.dataset.table_year.
+	sourceTable := fmt.Sprintf("%s.%s.%s_%s", exporter.projectID, config.Dataset,
+		config.Table, year)
+
 	// Generate WHERE clauses to shard the export query.
-	clauses, err := exporter.generateWhereClauses(ctx, config, year)
+	clauses, err := exporter.generateWhereClauses(ctx, sourceTable, config.PartitionField)
 	if err != nil {
 		log.Print(err)
 		return err
@@ -146,7 +179,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 		// available queryWorker functions.
 		var buf bytes.Buffer
 		err = queryTpl.Execute(&buf, map[string]string{
-			"sourceTable": config.SourceTable,
+			"sourceTable": sourceTable,
 			"whereClause": v,
 		})
 		if err != nil {
@@ -158,7 +191,9 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 			// If the context has been closed, we stop writing to the channel.
 			break
 		default:
+			log.Printf("Running query: %s", buf.String())
 			queryJobs <- &QueryJob{
+				name:       sourceTable,
 				query:      buf.String(),
 				fields:     fields,
 				outputPath: outputPath,
@@ -197,10 +232,31 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 	for j := range queryJobs {
 		// Run the SELECT query to get histogram data.
 		q := exporter.bqClient.Query(j.query)
-		it, err := q.Read(ctx)
+		job, err := q.Run(ctx)
+		if err != nil {
+			log.Print(err)
+			break
+		}
+		jobStatus, err := job.Wait(ctx)
+		if err != nil {
+			log.Print(err)
+			break
+		}
+		if jobStatus.Err() != nil {
+			log.Print(err)
+			break
+		}
+		it, err := job.Read(ctx)
 		if err != nil {
 			log.Print(err)
 			continue
+		}
+		// Update bytes processed.
+		if queryDetails, ok := jobStatus.Statistics.Details.(*bigquery.QueryStatistics); ok {
+			if queryDetails.CacheHit {
+				cacheHitMetric.WithLabelValues(j.name).Inc()
+			}
+			bytesProcessedMetric.WithLabelValues(j.name).Add(float64(queryDetails.TotalBytesProcessed))
 		}
 		// Iterate over the returned rows and upload results to GCS.
 		var currentFile []bqRow
@@ -221,11 +277,13 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 						break
 					}
 					atomic.AddInt32(uploadCounter, 1)
-					marshalAndUpload(buf.String(), currentFile, uploadJobs)
+					marshalAndUpload(j.name, buf.String(), currentFile, uploadJobs)
 				} else {
-					// If there was an unexpected error while reading the
-					// next row, print the error and return.
-					log.Print(err)
+					if !errors.Is(err, context.Canceled) {
+						// If there was an unexpected error while reading the
+						// next row, print the error and return.
+						log.Print(err)
+					}
 				}
 				break
 			}
@@ -255,7 +313,7 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 					break
 				}
 				atomic.AddInt32(uploadCounter, 1)
-				marshalAndUpload(buf.String(), currentFile, uploadJobs)
+				marshalAndUpload(j.name, buf.String(), currentFile, uploadJobs)
 				// Empty currentFile and set currentRowKey to the new
 				// rowKey.
 				currentFile = currentFile[:0]
@@ -285,6 +343,7 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context,
 		// the file, so that in-flight uploads aren't counted.
 		atomic.AddInt32(uploadQueue, -1)
 		_, err := up.Upload(ctx, j.objName, j.content)
+		uploadedBytesMetric.WithLabelValues(j.table).Add(float64(len(j.content)))
 		results <- UploadResult{
 			objName: j.objName,
 			err:     err,
@@ -292,20 +351,14 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context,
 	}
 }
 
-// generateWhereClauses generates all the WHERE clauses
+// generateWhereClauses generates all the WHERE clauses to filter by partition,
+// sorted by decreasing size. This allows to process the largest partitions
+// first.
 func (exporter *JSONExporter) generateWhereClauses(ctx context.Context,
-	config config.ExportConfig, year string) ([]string, error) {
-	yearClause := fmt.Sprintf("extract(year from date) = %s", year)
-	if config.ShardKey == "" {
-		// If there is no shard key, just return the year clause.
-		return []string{"WHERE " + yearClause}, nil
-	}
-	// Get all the values for the config.ShardKey field in the source table.
-	selectQuery := "SELECT " + config.ShardKey +
-		" FROM " + config.SourceTable +
-		" WHERE " + yearClause +
-		" GROUP BY " + config.ShardKey +
-		" ORDER BY " + config.ShardKey
+	fullyQualifiedTable, partitionField string) ([]string, error) {
+	selectQuery := fmt.Sprintf(`SELECT %s, count(*) FROM %s GROUP BY %[1]s
+		ORDER BY count(*) DESC`, partitionField, fullyQualifiedTable)
+	log.Print(selectQuery)
 	q := exporter.bqClient.Query(selectQuery)
 	it, err := q.Read(ctx)
 	if err != nil {
@@ -323,42 +376,16 @@ func (exporter *JSONExporter) generateWhereClauses(ctx context.Context,
 		if err != nil {
 			return nil, err
 		}
-		for k, v := range row {
-			clauses = append(clauses, fmt.Sprintf("%s = \"%s\"", k, v))
-		}
+		partition := row[partitionField].(int64)
+		clauses = append(clauses, fmt.Sprintf("WHERE %s = %d", partitionField, partition))
 	}
-
-	// Groups clauses into batchSize-sized OR clauses. This allows to handle
-	// cases where the shard key would generate too many WHERE clauses, by
-	// making each query return a union of results from multiple clauses.
-	// e.g. for continent_code and batchSize = 7, we get a single WHERE
-	// including all the continents:
-	//
-	// WHERE extract(year from date) = 2020 AND (continent_code = "AF" OR
-	// continent_code = "AN" OR ...)
-	//
-	// The code for batching is adapted from:
-	// https://github.com/golang/go/wiki/SliceTricks#batching-with-minimal-allocation
-	batchSize := config.BatchSize
-	if batchSize == 0 {
-		batchSize = 1
-	}
-	results := make([]string, 0, (len(clauses)+batchSize-1)/batchSize)
-	for batchSize < len(clauses) {
-		clausesUnion := strings.Join(clauses[0:batchSize:batchSize], " OR ")
-		clauses, results = clauses[batchSize:], append(results,
-			fmt.Sprintf("WHERE %s AND (%s)", yearClause, clausesUnion))
-	}
-	clausesUnion := strings.Join(clauses, " OR ")
-	results = append(results, fmt.Sprintf("WHERE %s AND (%s)", yearClause, clausesUnion))
-
-	return results, nil
+	return clauses, nil
 }
 
 // marshalAndUpload marshals the BigQuery rows into a JSON array and sends a
 // new UploadJob to the uploadJobs channel so the result is uploaded to GCS as
 // objName.
-func marshalAndUpload(objName string, rows []bqRow,
+func marshalAndUpload(tableName, objName string, rows []bqRow,
 	uploadJobs chan<- *UploadJob) error {
 	j, err := json.Marshal(rows)
 	if err != nil {
@@ -366,6 +393,7 @@ func marshalAndUpload(objName string, rows []bqRow,
 	}
 
 	uploadJobs <- &UploadJob{
+		table:   tableName,
 		objName: objName,
 		content: j,
 	}
@@ -378,7 +406,7 @@ func printStats(ctx context.Context, uploadQLen *int32, queriesDone *int32,
 	uploaded := 0
 	errors := 0
 	start := time.Now()
-	lastUpdate := start
+	t := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-ctx.Done():
@@ -389,16 +417,13 @@ func printStats(ctx context.Context, uploadQLen *int32, queriesDone *int32,
 			} else {
 				uploaded++
 			}
-		default:
-			if time.Since(lastUpdate) > 1*time.Second {
-				log.Printf(
-					"Elapsed: %s, queries: %d/%d, uploaded: %d (%d errors), files/s: %f, UL queue: %d",
-					time.Since(start).Round(time.Second).String(),
-					atomic.LoadInt32(queriesDone), totQueries, uploaded, errors,
-					float64(uploaded)/time.Since(start).Seconds(),
-					atomic.LoadInt32(uploadQLen))
-				lastUpdate = time.Now()
-			}
+		case <-t.C:
+			log.Printf(
+				"Elapsed: %s, queries: %d/%d, uploaded: %d (%d errors), files/s: %f, UL queue: %d",
+				time.Since(start).Round(time.Second).String(),
+				atomic.LoadInt32(queriesDone), totQueries, uploaded, errors,
+				float64(uploaded)/time.Since(start).Seconds(),
+				atomic.LoadInt32(uploadQLen))
 		}
 	}
 }

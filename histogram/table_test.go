@@ -117,7 +117,7 @@ func (j *mockJob) Wait(context.Context) (*bigquery.JobStatus, error) {
 
 // ***** Tests *****
 func TestNewTable(t *testing.T) {
-	table := NewTable("test_table", "dataset", "SELECT 1", &mockClient{})
+	table := NewTable("test_table", "dataset", "SELECT 1", "test_hash", &mockClient{})
 	if table == nil {
 		t.Errorf("NewTable() returned nil.")
 	}
@@ -125,7 +125,7 @@ func TestNewTable(t *testing.T) {
 
 func TestTable_queryConfig(t *testing.T) {
 	testQuery := "SELECT 1"
-	table := NewTable("test", "dataset", "", &mockClient{})
+	table := NewTable("test", "dataset", "", "test_hash", &mockClient{})
 	q := table.queryConfig(testQuery)
 	if q.Q != testQuery {
 		t.Errorf("queryConfig(): expected %s, got %s.", testQuery, q.Q)
@@ -133,13 +133,13 @@ func TestTable_queryConfig(t *testing.T) {
 }
 
 func TestTable_deleteRows(t *testing.T) {
-	table := NewTable("test", "dataset", "query", &mockClient{})
+	table := NewTable("test", "dataset", "query", "test_hash", &mockClient{})
 	err := table.deleteRows(context.Background(), time.Now(), time.Now().Add(1*time.Minute))
 	if err != nil {
 		t.Errorf("deleteRows() returned err: %v", err)
 	}
 
-	table = NewTable("test", "dataset", "query", &mockClient{
+	table = NewTable("test", "dataset", "query", "test_hash", &mockClient{
 		queryReadMustFail: true,
 	})
 	err = table.deleteRows(context.Background(), time.Now(), time.Now().Add(1*time.Minute))
@@ -190,15 +190,15 @@ func TestTable_UpdateHistogram(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			hist := &Table{
 				Table:  tt.client.Dataset("test_ds").Table("test_table"),
-				Query:  tt.query,
-				Client: tt.client,
+				query:  tt.query,
+				client: tt.client,
 			}
 			if err := hist.UpdateHistogram(context.Background(), start,
 				end); (err != nil) != tt.wantErr {
 				t.Errorf("Table.UpdateHistogram() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			if mockClient, ok := hist.Client.(*mockClient); ok {
+			if mockClient, ok := hist.client.(*mockClient); ok {
 				if tt.want != nil && !reflect.DeepEqual(mockClient.queries, tt.want) {
 					t.Errorf("UpdateHistogram(): expected %v, got %v", tt.want,
 						mockClient.queries)

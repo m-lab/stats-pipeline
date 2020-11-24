@@ -135,11 +135,12 @@ func TestNew(t *testing.T) {
 	bq, err := bqfake.NewClient(context.Background(), "test")
 	testingx.Must(t, err, "cannot init bq client")
 	gcs := &gcsfake.GCSClient{}
-	exporter := New(bq, gcs, "test-bucket")
+	exporter := New(bq, gcs, "project", "test-bucket")
 	if exporter == nil {
 		t.Fatalf("New() returned nil.")
 	}
 	if exporter.bqClient != bq || exporter.storageClient != gcs ||
+		exporter.projectID != "project" ||
 		exporter.bucket != "test-bucket" {
 		t.Errorf("New() didn't return the expected exporter instance")
 	}
@@ -253,7 +254,7 @@ func TestJSONExporter_marshalAndUpload(t *testing.T) {
 	}
 	rows := []bqRow{fakeRow}
 	go func() {
-		err := marshalAndUpload("test", rows, jobs)
+		err := marshalAndUpload("tablename", "test", rows, jobs)
 		if err != nil {
 			t.Errorf("marshalAndUpload() returned err: %v", err)
 		}
@@ -276,7 +277,7 @@ func TestJSONExporter_marshalAndUpload(t *testing.T) {
 	rows = append(rows, unmarshallableRow)
 	jobs = make(chan *UploadJob)
 	go func() {
-		err := marshalAndUpload("this-will-fail", rows, jobs)
+		err := marshalAndUpload("tablename", "this-will-fail", rows, jobs)
 		if err == nil {
 			t.Errorf("marshalAndUpload(): expected error, got nil")
 		}
@@ -308,10 +309,10 @@ func Test_printStats(t *testing.T) {
 		err:     errors.New("upload failed"),
 	}
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	if !strings.Contains(out.String(), "uploaded: 1") ||
 		!strings.Contains(out.String(), "1 errors") {
-		t.Errorf("printStats() didn't print the expected output")
+		t.Errorf("printStats() didn't print the expected output: %v", out.String())
 	}
 }
 
