@@ -354,6 +354,9 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context,
 // generateWhereClauses generates all the WHERE clauses to filter by partition,
 // sorted by decreasing size. This allows to process the largest partitions
 // first.
+// E.g. if partitionField is continent_code_hash, this will return 7 clauses:
+// - WHERE continent_code_hash = <partition>
+// - [...]
 func (exporter *JSONExporter) generateWhereClauses(ctx context.Context,
 	fullyQualifiedTable, partitionField string) ([]string, error) {
 	selectQuery := fmt.Sprintf(`SELECT %s, count(*) FROM %s GROUP BY %[1]s
