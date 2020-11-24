@@ -35,11 +35,11 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	me := &mockExporter{}
 	conf := map[string]config.Config{
 		"test": {
-			HistogramQuery: "testdata/test_histogram.sql",
-			ExportQuery:    "testdata/test_export.sql",
-			Dataset:        "test",
-			Table:          "testtable",
-			PartitionField: "test_hash",
+			HistogramQueryFile: "testdata/test_histogram.sql",
+			ExportQueryFile:    "testdata/test_export.sql",
+			Dataset:            "test",
+			Table:              "testtable",
+			PartitionField:     "test_hash",
 		},
 	}
 

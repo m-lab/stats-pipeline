@@ -106,10 +106,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Printf("Exporting %s...", name)
 		// Read query file
-		content, err := ioutil.ReadFile(config.ExportQuery)
+		content, err := ioutil.ReadFile(config.ExportQueryFile)
 		if err != nil {
 			log.Printf("Cannot read query file %s, skipping (%v)",
-				config.ExportQuery, err)
+				config.ExportQueryFile, err)
 			continue
 		}
 		selectTpl := template.Must(template.New(name).
@@ -120,7 +120,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) generateHistogramForYear(ctx context.Context,
 	config config.Config, year string) error {
-	content, err := ioutil.ReadFile(config.HistogramQuery)
+	content, err := ioutil.ReadFile(config.HistogramQueryFile)
 	if err != nil {
 		return err
 	}
