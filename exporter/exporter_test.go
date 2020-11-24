@@ -318,9 +318,10 @@ func Test_printStats(t *testing.T) {
 
 func Test_getFieldsFromPath(t *testing.T) {
 	tests := []struct {
-		name string
-		path string
-		want []string
+		name    string
+		path    string
+		want    []string
+		wantErr bool
 	}{
 		{
 			name: "ok",
@@ -328,15 +329,20 @@ func Test_getFieldsFromPath(t *testing.T) {
 			want: []string{"foo", "bar"},
 		},
 		{
-			name: "no-matches",
-			path: "{{foo}}/{{bar}}",
-			want: nil,
+			name:    "no-matches",
+			path:    "{{foo}}/{{bar}}",
+			want:    nil,
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := getFieldsFromPath(tt.path); !reflect.DeepEqual(got, tt.want) {
+			got, err := getFieldsFromPath(tt.path)
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("getFieldsFromPath() = %v, want %v", got, tt.want)
+			}
+			if (err != nil) != tt.wantErr {
+				t.Errorf("exporter.getFieldsFromPath() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

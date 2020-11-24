@@ -125,7 +125,10 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	year string) error {
 
 	// Retrieve list of fields from the output path template string.
-	fields := getFieldsFromPath(config.OutputPath)
+	fields, err := getFieldsFromPath(config.OutputPath)
+	if err != nil {
+		return err
+	}
 	log.Printf("Fields: %s", fields)
 
 	// Make output path template.
@@ -139,7 +142,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 		config.Table, year)
 
 	// Generate WHERE clauses to shard the export query.
-	clauses, err := exporter.generateWhereClauses(ctx, sourceTable, config.PartitionField)
+	clauses, err := exporter.getPartitionFilters(ctx, sourceTable, config.PartitionField)
 	if err != nil {
 		log.Print(err)
 		return err
@@ -214,14 +217,6 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 
 // queryWorker reads the next available QueryJob from the queryJobs channel and
 // processes the result.
-//
-// For each row it generates a row key based on the fields in QueryJob.fields.
-// When the row key changes, it means a file containing the rows read so far
-// is ready to be uploaded, so the rows are marshalled and sent to the
-// uploadJobs channel.
-//
-// NOTE: for this to work correctly, the results MUST be ordered by the fields
-// in queryJob.fields.
 func (exporter *JSONExporter) queryWorker(ctx context.Context,
 	uploadCounter *int32, wg *sync.WaitGroup, queryJobs <-chan *QueryJob,
 	uploadJobs chan<- *UploadJob) {
@@ -259,73 +254,76 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 			bytesProcessedMetric.WithLabelValues(j.name).Add(float64(queryDetails.TotalBytesProcessed))
 		}
 		// Iterate over the returned rows and upload results to GCS.
-		var currentFile []bqRow
-		var currentRowKey string
-		var oldRow bqRow
-		for {
-			var currentRow bqRow
-			it.PageInfo().MaxSize = 100000
-			err := it.Next(&currentRow)
-			if err != nil {
-				if err == iterator.Done {
-					// If this was the last row, upload the file so far.
-					buf := new(bytes.Buffer)
-					err = j.outputPath.Execute(buf, oldRow)
-					if err != nil {
-						log.Printf("Cannot generate path (tpl:%s): %v",
-							j.outputPath.Root.String(), err)
-						break
-					}
-					atomic.AddInt32(uploadCounter, 1)
-					marshalAndUpload(j.name, buf.String(), currentFile, uploadJobs)
-				} else {
-					if !errors.Is(err, context.Canceled) {
-						// If there was an unexpected error while reading the
-						// next row, print the error and return.
-						log.Print(err)
-					}
-				}
-				break
-			}
-			// Calculate the row key by combining all the fields that are in the
-			// output path template.
-			rowKey := ""
-			for _, f := range j.fields {
-				// Try reading the field as either string or int64 and
-				// append the result to rowKey.
-				if s, ok := currentRow[f].(string); ok {
-					rowKey += s
-				} else if i, ok := currentRow[f].(int64); ok {
-					rowKey += strconv.Itoa(int(i))
-				}
-			}
-			// If this is the first row, currentRowKey will be empty.
-			if currentRowKey == "" {
-				currentRowKey = rowKey
-			} else if rowKey != currentRowKey {
-				// If the row key has changed, send the current rows to GCS
-				// and start a new file.
+		exporter.processQueryResults(it, j, uploadJobs, uploadCounter)
+	}
+}
+
+// processQueryResults loops over a RowIterator.
+// For each row it generates a row key combining the fields in QueryJob.fields.
+// When the row key changes, it means a file containing the rows read so far
+// is ready to be uploaded, so the rows are marshalled and sent to the
+// uploadJobs channel.
+//
+// For every UploadJob sent over the channel, it also atomically increments
+// uploadCounter.
+func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
+	j *QueryJob, uploadJobs chan<- *UploadJob, uploadCounter *int32) error {
+	var currentFile []bqRow
+	var currentRowKey string
+	var oldRow bqRow
+	for {
+		var currentRow bqRow
+		it.PageInfo().MaxSize = 100000
+		err := it.Next(&currentRow)
+		if err != nil {
+			if err == iterator.Done {
+				// If this was the last row, upload the file so far.
 				buf := new(bytes.Buffer)
 				err = j.outputPath.Execute(buf, oldRow)
 				if err != nil {
-					log.Printf("Cannot generate path (tpl:%s): %v",
-						j.outputPath.Root.String(), err)
-					break
+					return err
 				}
 				atomic.AddInt32(uploadCounter, 1)
 				marshalAndUpload(j.name, buf.String(), currentFile, uploadJobs)
-				// Empty currentFile and set currentRowKey to the new
-				// rowKey.
-				currentFile = currentFile[:0]
-				currentRowKey = rowKey
 			}
-			// We are in the middle of a file, so just append the current
-			// row to currentFile. Fields that appear in the output path
-			// are removed to avoid redundancy in the JSON and create
-			// smaller files.
-			currentFile = append(currentFile, removeFieldsFromRow(currentRow, j.fields))
-			oldRow = currentRow
+			return err
 		}
+		// Calculate the row key by combining all the fields that are in the
+		// output path template.
+		rowKey := ""
+		for _, f := range j.fields {
+			// Try reading the field as either string or int64 and
+			// append the result to rowKey.
+			if s, ok := currentRow[f].(string); ok {
+				rowKey += s
+			} else if i, ok := currentRow[f].(int64); ok {
+				rowKey += strconv.Itoa(int(i))
+			}
+		}
+		// If this is the first row, currentRowKey will be empty.
+		if currentRowKey == "" {
+			currentRowKey = rowKey
+		} else if rowKey != currentRowKey {
+			// If the row key has changed, send the current rows to GCS
+			// and start a new file.
+			buf := new(bytes.Buffer)
+			err = j.outputPath.Execute(buf, oldRow)
+			if err != nil {
+				return err
+			}
+			atomic.AddInt32(uploadCounter, 1)
+			marshalAndUpload(j.name, buf.String(), currentFile, uploadJobs)
+			// Empty currentFile and set currentRowKey to the new
+			// rowKey.
+			currentFile = currentFile[:0]
+			currentRowKey = rowKey
+		}
+		// We are in the middle of a file, so just append the current
+		// row to currentFile. Fields that appear in the output path
+		// are removed to avoid redundancy in the JSON and create
+		// smaller files.
+		currentFile = append(currentFile, removeFieldsFromRow(currentRow, j.fields))
+		oldRow = currentRow
 	}
 }
 
@@ -351,13 +349,13 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context,
 	}
 }
 
-// generateWhereClauses generates all the WHERE clauses to filter by partition,
+// getPartitionFilters returns all the WHERE clauses to filter by partition,
 // sorted by decreasing size. This allows to process the largest partitions
 // first.
 // E.g. if partitionField is continent_code_hash, this will return 7 clauses:
 // - WHERE continent_code_hash = <partition>
 // - [...]
-func (exporter *JSONExporter) generateWhereClauses(ctx context.Context,
+func (exporter *JSONExporter) getPartitionFilters(ctx context.Context,
 	fullyQualifiedTable, partitionField string) ([]string, error) {
 	selectQuery := fmt.Sprintf(`SELECT %s, count(*) FROM %s GROUP BY %[1]s
 		ORDER BY count(*) DESC`, partitionField, fullyQualifiedTable)
@@ -433,13 +431,16 @@ func printStats(ctx context.Context, uploadQLen *int32, queriesDone *int32,
 
 // getFieldsFromPath takes the outputPath template string and returns the
 // fields matched by the capture group in fieldRegex.
-func getFieldsFromPath(path string) []string {
+func getFieldsFromPath(path string) ([]string, error) {
 	var fields []string
 	matches := fieldRegex.FindAllStringSubmatch(path, -1)
+	if len(matches) == 0 {
+		return nil, errors.New("no fields found in the path template")
+	}
 	for _, m := range matches {
 		fields = append(fields, m[1])
 	}
-	return fields
+	return fields, nil
 }
 
 // removeFieldsFromRow returns a new BQ row without the specified fields.
