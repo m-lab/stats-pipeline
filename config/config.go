@@ -2,10 +2,10 @@ package config
 
 // Config is a configuration object for the stats pipeline.
 type Config struct {
-	// HistogramQuery is the path to the query generating the histogram table.
-	HistogramQuery string
-	// ExportQuery is the pth to the export query.
-	ExportQuery string
+	// HistogramQueryFile is the path to the query generating the histogram table.
+	HistogramQueryFile string
+	// ExportQueryFile is the path to the export query.
+	ExportQueryFile string
 	// Dataset is the dataset name.
 	Dataset string
 	// Table is the histogram table name.

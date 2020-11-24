@@ -1,46 +1,46 @@
 {
     "continents": {
-        "histogramQuery": "statistics/queries/continent_histogram.sql",
-        "exportQuery": "statistics/exports/continents.sql",
+        "histogramQueryFile": "statistics/queries/continent_histogram.sql",
+        "exportQueryFile": "statistics/exports/continents.sql",
         "dataset": "statistics",
         "table": "continents",
         "outputPath": "v0/{{ .continent_code }}/{{ .year }}/histogram_daily_stats.json"
     },
     "countries": {
-        "histogramQuery": "statistics/queries/continent_country_histogram.sql",
-        "exportQuery": "statistics/exports/countries.sql",
+        "histogramQueryFile": "statistics/queries/continent_country_histogram.sql",
+        "exportQueryFile": "statistics/exports/countries.sql",
         "dataset": "statistics",
         "table": "countries",
         "partitionField": "country_code_hash",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .year }}/histogram_daily_stats.json"
     },
     "regions": {
-        "histogramQuery": "statistics/queries/countinent_country_region_histogram.sql",
-        "exportQuery": "statistics/exports/regions.sql",
+        "histogramQueryFile": "statistics/queries/countinent_country_region_histogram.sql",
+        "exportQueryFile": "statistics/exports/regions.sql",
         "dataset": "statistics",
         "table": "regions",
         "partitionField": "country_code_hash",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .year }}/histogram_daily_stats.json"
     },
     "cities": {
-        "histogramQuery": "statistics/queries/countinent_country_region_city_histogram.sql",
-        "exportQuery": "statistics/exports/cities.sql",
+        "histogramQueryFile": "statistics/queries/countinent_country_region_city_histogram.sql",
+        "exportQueryFile": "statistics/exports/cities.sql",
         "dataset": "statistics",
         "table": "cities",
         "partitionField": "region_code_hash",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .city }}/{{ .year }}/histogram_daily_stats.json"
     },
     "tracts": {
-        "histogramQuery": "statistics/queries/us_census_tracts_histogram.sql",
-        "exportQuery": "statistics/exports/us_tracts.sql",
+        "histogramQueryFile": "statistics/queries/us_census_tracts_histogram.sql",
+        "exportQueryFile": "statistics/exports/us_tracts.sql",
         "dataset": "statistics",
         "table": "us_tracts",
         "partitionField": "tract_hash",
         "outputPath": "v0/NA/US/tracts/{{ .GEOID }}/{{ .year }}/histogram_daily_stats.json"
     },
     "counties": {
-        "histogramQuery": "statistics/queries/us_county_histogram.sql",
-        "exportQuery": "statistics/exports/us_counties.sql",
+        "histogramQueryFile": "statistics/queries/us_county_histogram.sql",
+        "exportQueryFile": "statistics/exports/us_counties.sql",
         "dataset": "statistics",
         "table": "us_counties",
         "partitionField": "county_hash",
