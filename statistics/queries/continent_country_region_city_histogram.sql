@@ -114,7 +114,7 @@ dl_histogram AS (
     bucket_right AS bucket_max,
     COUNTIF(download_MED < bucket_right AND download_MAX >= bucket_left) AS dl_samples_bucket,
     COUNT(*) AS dl_samples_day,
-    COUNTIF(download_MED < bucket_right AND download_MAX >= bucket_left) / COUNT(*) AS fl_frac
+    COUNTIF(download_MED < bucket_right AND download_MAX >= bucket_left) / COUNT(*) AS dl_frac
   FROM dl_stats_perip_perday CROSS JOIN buckets
   GROUP BY
     date,
