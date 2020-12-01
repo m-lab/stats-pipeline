@@ -30,8 +30,11 @@ const (
 	// Number of goroutines for querying BQ.
 	nQueryWorkers = 15
 
-	// Numbers of goroutines for uploading to GCS.
+	// Number of goroutines for uploading to GCS.
 	nUploadWorkers = 25
+
+	// Name of the field used to partition tables.
+	partitionField = "shard"
 )
 
 var (
@@ -151,7 +154,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 		config.Table, year)
 
 	// Generate WHERE clauses to shard the export query.
-	clauses, err := exporter.getPartitionFilters(ctx, sourceTable, config.PartitionField)
+	clauses, err := exporter.getPartitionFilters(ctx, sourceTable)
 	if err != nil {
 		log.Print(err)
 		return err
@@ -362,7 +365,7 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context,
 // - WHERE continent_code_hash = <partition>
 // - [...]
 func (exporter *JSONExporter) getPartitionFilters(ctx context.Context,
-	fullyQualifiedTable, partitionField string) ([]string, error) {
+	fullyQualifiedTable string) ([]string, error) {
 	selectQuery := fmt.Sprintf(`SELECT %s FROM %s GROUP BY %[1]s
 		ORDER BY COUNT(*) DESC`, partitionField, fullyQualifiedTable)
 	log.Print(selectQuery)

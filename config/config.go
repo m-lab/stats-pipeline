@@ -12,6 +12,4 @@ type Config struct {
 	Table string
 	// OutputPath is a template defining the output path on GCS.
 	OutputPath string
-	// PartitionField is the field to partition the table on.
-	PartitionField string
 }

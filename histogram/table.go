@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	dateFormat    = "2006-01-02"
-	deleteRowsTpl = "DELETE FROM {{.Table}} WHERE date BETWEEN \"{{.Start}}\" AND \"{{.End}}\""
+	dateFormat     = "2006-01-02"
+	deleteRowsTpl  = "DELETE FROM {{.Table}} WHERE date BETWEEN \"{{.Start}}\" AND \"{{.End}}\""
+	partitionField = "shard"
 )
 
 // Table represents a bigquery table containing histogram data.
@@ -84,16 +85,15 @@ func (t *Table) UpdateHistogram(ctx context.Context, start, end time.Time) error
 
 	// Configure the histogram generation query.
 	qc := t.queryConfig(t.query)
-	if t.partitionField != "" {
-		qc.RangePartitioning = &bigquery.RangePartitioning{
-			Field: t.partitionField,
-			Range: &bigquery.RangePartitioningRange{
-				Start:    0,
-				End:      3999,
-				Interval: 1,
-			},
-		}
+	qc.RangePartitioning = &bigquery.RangePartitioning{
+		Field: partitionField,
+		Range: &bigquery.RangePartitioningRange{
+			Start:    0,
+			End:      3999,
+			Interval: 1,
+		},
 	}
+
 	qc.Dst = t.Table
 	qc.WriteDisposition = bigquery.WriteAppend
 	qc.Parameters = []bigquery.QueryParameter{

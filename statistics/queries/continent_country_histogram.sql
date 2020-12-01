@@ -214,7 +214,7 @@ ul_histogram AS (
     bucket_max
 )
 # Show the results
-SELECT *, MOD(ABS(FARM_FINGERPRINT(country_code)), 1000) as country_code_hash FROM dl_histogram
+SELECT *, MOD(ABS(FARM_FINGERPRINT(country_code)), 1000) as shard FROM dl_histogram
 JOIN ul_histogram USING (date, continent_code, country_code, bucket_min, bucket_max)
 JOIN dl_stats_per_day USING (date, continent_code, country_code)
 JOIN ul_stats_per_day USING (date, continent_code, country_code)
