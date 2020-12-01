@@ -363,8 +363,8 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context,
 // - [...]
 func (exporter *JSONExporter) getPartitionFilters(ctx context.Context,
 	fullyQualifiedTable, partitionField string) ([]string, error) {
-	selectQuery := fmt.Sprintf(`SELECT %s, count(*) FROM %s GROUP BY %[1]s
-		ORDER BY count(*) DESC`, partitionField, fullyQualifiedTable)
+	selectQuery := fmt.Sprintf(`SELECT %s FROM %s GROUP BY %[1]s
+		ORDER BY COUNT(*) DESC`, partitionField, fullyQualifiedTable)
 	log.Print(selectQuery)
 	q := exporter.bqClient.Query(selectQuery)
 	it, err := q.Read(ctx)
