@@ -294,17 +294,19 @@ func Test_printStats(t *testing.T) {
 	log.SetOutput(out)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	var uploadQLen int32
-	var queriesDone int32
 
-	results := make(chan UploadResult)
-	go printStats(ctx, &uploadQLen, &queriesDone, 1, results)
+	bq, err := bqfake.NewClient(context.Background(), "test")
+	testingx.Must(t, err, "cannot init bq client")
+	gcs := &gcsfake.GCSClient{}
+	exporter := New(bq, gcs, "project", "test-bucket")
+
+	go exporter.printStats(ctx, 1)
 	// Send a successful upload and an error, then check the output after a
 	// second.
-	results <- UploadResult{
+	exporter.results <- UploadResult{
 		objName: "test",
 	}
-	results <- UploadResult{
+	exporter.results <- UploadResult{
 		objName: "failed",
 		err:     errors.New("upload failed"),
 	}

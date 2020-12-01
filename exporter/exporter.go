@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"regexp"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"text/template"
@@ -69,6 +68,13 @@ type JSONExporter struct {
 
 	bucket    string
 	projectID string
+
+	queryJobs  chan *QueryJob
+	uploadJobs chan *UploadJob
+	results    chan UploadResult
+
+	queriesDone int32
+	uploadQLen  int32
 }
 
 // UploadJob is a job for uploading data to a GCS bucket.
@@ -100,6 +106,9 @@ func New(bqClient bqiface.Client, storageClient stiface.Client, projectID,
 		storageClient: storageClient,
 		projectID:     projectID,
 		bucket:        bucket,
+		queryJobs:     make(chan *QueryJob),
+		uploadJobs:    make(chan *UploadJob),
+		results:       make(chan UploadResult),
 	}
 }
 
@@ -149,24 +158,24 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	}
 
 	// Create channels for query/upload jobs and results.
-	queryJobs := make(chan *QueryJob)
-	uploadJobs := make(chan *UploadJob)
-	results := make(chan UploadResult)
+	exporter.queryJobs = make(chan *QueryJob)
+	exporter.uploadJobs = make(chan *UploadJob)
+	exporter.results = make(chan UploadResult)
 
-	// Counters to record progress.
-	var uploadQLen int32
-	var queriesDone int32
+	// Set counters to zero.
+	exporter.uploadQLen = 0
+	exporter.queriesDone = 0
 
 	// Start a goroutine to print statistics periodically.
 	printStatsCtx, cancelPrintStats := context.WithCancel(ctx)
-	go printStats(printStatsCtx, &uploadQLen, &queriesDone, len(clauses), results)
+	go exporter.printStats(printStatsCtx, len(clauses))
 	defer cancelPrintStats()
 
 	queryWg := sync.WaitGroup{}
 	// Create queryWorkers.
 	for w := 1; w <= nQueryWorkers; w++ {
 		queryWg.Add(1)
-		go exporter.queryWorker(ctx, &uploadQLen, &queryWg, queryJobs, uploadJobs)
+		go exporter.queryWorker(ctx, &queryWg)
 	}
 
 	// Create uploadWorkers.
@@ -174,7 +183,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	uploadWg := sync.WaitGroup{}
 	for w := 1; w <= nUploadWorkers; w++ {
 		uploadWg.Add(1)
-		go exporter.uploadWorker(ctx, &uploadQLen, &uploadWg, up, uploadJobs, results)
+		go exporter.uploadWorker(ctx, &uploadWg, up)
 	}
 
 	for _, v := range clauses {
@@ -195,22 +204,22 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 			break
 		default:
 			log.Printf("Running query: %s", buf.String())
-			queryJobs <- &QueryJob{
+			exporter.queryJobs <- &QueryJob{
 				name:       sourceTable,
 				query:      buf.String(),
 				fields:     fields,
 				outputPath: outputPath,
 			}
-			atomic.AddInt32(&queriesDone, 1)
+			atomic.AddInt32(&exporter.queriesDone, 1)
 		}
 	}
 	// The goroutines' termination is controlled by closing the channels they
 	// work on. The fist WaitGroup makes sure all the query workers have been
 	// terminated before terminating the upload workers. The second one makes
 	// sure all the upload workers have been terminated before returning.
-	close(queryJobs)
+	close(exporter.queryJobs)
 	queryWg.Wait()
-	close(uploadJobs)
+	close(exporter.uploadJobs)
 	uploadWg.Wait()
 	return nil
 }
@@ -218,28 +227,27 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 // queryWorker reads the next available QueryJob from the queryJobs channel and
 // processes the result.
 func (exporter *JSONExporter) queryWorker(ctx context.Context,
-	uploadCounter *int32, wg *sync.WaitGroup, queryJobs <-chan *QueryJob,
-	uploadJobs chan<- *UploadJob) {
+	wg *sync.WaitGroup) {
 
 	// Make sure we decrement the waitgroup's counter before returning.
 	defer wg.Done()
 
-	for j := range queryJobs {
+	for j := range exporter.queryJobs {
 		// Run the SELECT query to get histogram data.
 		q := exporter.bqClient.Query(j.query)
 		job, err := q.Run(ctx)
 		if err != nil {
 			log.Print(err)
-			break
+			continue
 		}
 		jobStatus, err := job.Wait(ctx)
 		if err != nil {
 			log.Print(err)
-			break
+			continue
 		}
 		if jobStatus.Err() != nil {
 			log.Print(err)
-			break
+			continue
 		}
 		it, err := job.Read(ctx)
 		if err != nil {
@@ -254,7 +262,11 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 			bytesProcessedMetric.WithLabelValues(j.name).Add(float64(queryDetails.TotalBytesProcessed))
 		}
 		// Iterate over the returned rows and upload results to GCS.
-		exporter.processQueryResults(it, j, uploadJobs, uploadCounter)
+		err = exporter.processQueryResults(it, j)
+		if err != nil {
+			log.Print(err)
+			continue
+		}
 	}
 }
 
@@ -267,56 +279,25 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 // For every UploadJob sent over the channel, it also atomically increments
 // uploadCounter.
 func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
-	j *QueryJob, uploadJobs chan<- *UploadJob, uploadCounter *int32) error {
+	j *QueryJob) error {
 	var currentFile []bqRow
-	var currentRowKey string
 	var oldRow bqRow
-	for {
-		var currentRow bqRow
-		it.PageInfo().MaxSize = 100000
-		err := it.Next(&currentRow)
-		if err != nil {
-			if err == iterator.Done {
-				// If this was the last row, upload the file so far.
-				buf := new(bytes.Buffer)
-				err = j.outputPath.Execute(buf, oldRow)
-				if err != nil {
-					return err
+	var currentRow bqRow
+	var err error
+	it.PageInfo().MaxSize = 100000
+
+	for err = it.Next(&currentRow); err == nil; err = it.Next(&currentRow) {
+		// If any of j.fields changed between this row and the previous one,
+		// upload the current file. Ignore the first row.
+		if oldRow != nil {
+			for _, f := range j.fields {
+				if currentRow[f] != oldRow[f] {
+					// upload file, empty currentFile, break
+					exporter.uploadFile(j, currentFile)
+					currentFile = currentFile[:0]
+					break
 				}
-				atomic.AddInt32(uploadCounter, 1)
-				marshalAndUpload(j.name, buf.String(), currentFile, uploadJobs)
 			}
-			return err
-		}
-		// Calculate the row key by combining all the fields that are in the
-		// output path template.
-		rowKey := ""
-		for _, f := range j.fields {
-			// Try reading the field as either string or int64 and
-			// append the result to rowKey.
-			if s, ok := currentRow[f].(string); ok {
-				rowKey += s
-			} else if i, ok := currentRow[f].(int64); ok {
-				rowKey += strconv.Itoa(int(i))
-			}
-		}
-		// If this is the first row, currentRowKey will be empty.
-		if currentRowKey == "" {
-			currentRowKey = rowKey
-		} else if rowKey != currentRowKey {
-			// If the row key has changed, send the current rows to GCS
-			// and start a new file.
-			buf := new(bytes.Buffer)
-			err = j.outputPath.Execute(buf, oldRow)
-			if err != nil {
-				return err
-			}
-			atomic.AddInt32(uploadCounter, 1)
-			marshalAndUpload(j.name, buf.String(), currentFile, uploadJobs)
-			// Empty currentFile and set currentRowKey to the new
-			// rowKey.
-			currentFile = currentFile[:0]
-			currentRowKey = rowKey
 		}
 		// We are in the middle of a file, so just append the current
 		// row to currentFile. Fields that appear in the output path
@@ -325,24 +306,49 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 		currentFile = append(currentFile, removeFieldsFromRow(currentRow, j.fields))
 		oldRow = currentRow
 	}
+
+	if err == iterator.Done {
+		// If this was the last row, upload the file so far.
+		exporter.uploadFile(j, currentFile)
+		// This is the expected behavior, so we don't consider this an error.
+		return nil
+	}
+
+	return err
+}
+
+// uploadFile marshals the BigQuery rows and uploads the resulting JSON to the
+// GCS path defined in the QueryJob. Template variables are taken from the
+// first row in the slice.
+func (exporter *JSONExporter) uploadFile(j *QueryJob, rows []bqRow) error {
+	if len(rows) == 0 {
+		return errors.New("empty rows slice")
+	}
+	buf := new(bytes.Buffer)
+	// Use the first row to fill in the template variables.
+	err := j.outputPath.Execute(buf, rows[0])
+	if err != nil {
+		return err
+	}
+	atomic.AddInt32(&exporter.uploadQLen, 1)
+	marshalAndUpload(j.name, buf.String(), rows, exporter.uploadJobs)
+	return nil
 }
 
 // uploadWorker receives UploadJobs from the channel and uploads files to GCS.
 func (exporter *JSONExporter) uploadWorker(ctx context.Context,
-	uploadQueue *int32, wg *sync.WaitGroup,
-	up *uploader.Uploader, jobs <-chan *UploadJob,
-	results chan<- UploadResult) {
+	wg *sync.WaitGroup, up *uploader.Uploader) {
 
 	// Make sure we decrement the waitgroup's counter before returning.
 	defer wg.Done()
 
-	for j := range jobs {
+	for j := range exporter.uploadJobs {
 		// The uploadQueue counter is decremented before starting to upload
 		// the file, so that in-flight uploads aren't counted.
-		atomic.AddInt32(uploadQueue, -1)
+		atomic.AddInt32(&exporter.uploadQLen, -1)
 		_, err := up.Upload(ctx, j.objName, j.content)
 		uploadedBytesMetric.WithLabelValues(j.table).Add(float64(len(j.content)))
-		results <- UploadResult{
+		exporter.results <- UploadResult{
 			objName: j.objName,
 			err:     err,
 		}
@@ -402,8 +408,7 @@ func marshalAndUpload(tableName, objName string, rows []bqRow,
 }
 
 // printStats prints statistics about the ongoing export every second.
-func printStats(ctx context.Context, uploadQLen *int32, queriesDone *int32,
-	totQueries int, results <-chan UploadResult) {
+func (exporter *JSONExporter) printStats(ctx context.Context, totQueries int) {
 	uploaded := 0
 	errors := 0
 	start := time.Now()
@@ -412,7 +417,7 @@ func printStats(ctx context.Context, uploadQLen *int32, queriesDone *int32,
 		select {
 		case <-ctx.Done():
 			return
-		case res := <-results:
+		case res := <-exporter.results:
 			if res.err != nil {
 				errors++
 			} else {
@@ -422,9 +427,9 @@ func printStats(ctx context.Context, uploadQLen *int32, queriesDone *int32,
 			log.Printf(
 				"Elapsed: %s, queries: %d/%d, uploaded: %d (%d errors), files/s: %f, UL queue: %d",
 				time.Since(start).Round(time.Second).String(),
-				atomic.LoadInt32(queriesDone), totQueries, uploaded, errors,
+				atomic.LoadInt32(&exporter.queriesDone), totQueries, uploaded, errors,
 				float64(uploaded)/time.Since(start).Seconds(),
-				atomic.LoadInt32(uploadQLen))
+				atomic.LoadInt32(&exporter.uploadQLen))
 		}
 	}
 }
