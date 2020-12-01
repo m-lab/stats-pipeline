@@ -196,7 +196,7 @@ ul_histogram AS (
     bucket_max
 )
 # Show the results
-SELECT * FROM dl_histogram
+SELECT *, MOD(ABS(FARM_FINGERPRINT(continent_code)), 1000) as shard FROM dl_histogram
 JOIN ul_histogram USING (date, continent_code, asn, bucket_min, bucket_max)
 JOIN dl_stats_per_day USING (date, continent_code, asn)
 JOIN ul_stats_per_day USING (date, continent_code, asn)

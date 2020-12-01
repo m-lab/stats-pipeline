@@ -317,7 +317,7 @@ ul_histogram AS (
     bucket_max
 )
 # Show the results
-SELECT * FROM dl_histogram
+SELECT *, MOD(ABS(FARM_FINGERPRINT(GEOID)), 4000) as shard FROM dl_histogram
 JOIN ul_histogram USING (date, state, state_name, tract_name, lsad_name, GEOID, asn, bucket_min, bucket_max)
 JOIN dl_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOID, asn)
 JOIN ul_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOID, asn)
