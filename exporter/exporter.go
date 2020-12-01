@@ -281,7 +281,7 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 	j *QueryJob) error {
 	var currentFile []bqRow
-	var oldRow bqRow
+	var lastRow bqRow
 	var currentRow bqRow
 	var err error
 	it.PageInfo().MaxSize = 100000
@@ -289,9 +289,9 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 	for err = it.Next(&currentRow); err == nil; err = it.Next(&currentRow) {
 		// If any of j.fields changed between this row and the previous one,
 		// upload the current file. Ignore the first row.
-		if oldRow != nil {
+		if lastRow != nil {
 			for _, f := range j.fields {
-				if currentRow[f] != oldRow[f] {
+				if currentRow[f] != lastRow[f] {
 					// upload file, empty currentFile, break
 					exporter.uploadFile(j, currentFile)
 					currentFile = currentFile[:0]
@@ -304,7 +304,7 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 		// are removed to avoid redundancy in the JSON and create
 		// smaller files.
 		currentFile = append(currentFile, removeFieldsFromRow(currentRow, j.fields))
-		oldRow = currentRow
+		lastRow = currentRow
 	}
 
 	if err == iterator.Done {
