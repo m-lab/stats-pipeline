@@ -17,9 +17,9 @@ import (
 const dateFormat = "2006-01-02"
 
 var (
-	newHistogramTable = func(name, ds, query, partitionField string,
+	newHistogramTable = func(name, ds, query string,
 		client bqiface.Client) HistogramTable {
-		return histogram.NewTable(name, ds, query, partitionField, client)
+		return histogram.NewTable(name, ds, query, client)
 	}
 )
 
@@ -127,7 +127,7 @@ func (h *Handler) generateHistogramForYear(ctx context.Context,
 	// Append year to the table name from the config.
 	table := fmt.Sprintf("%s_%s", config.Table, year)
 	hist := newHistogramTable(table, config.Dataset, string(content),
-		config.PartitionField, h.bqClient)
+		h.bqClient)
 	start, err := time.Parse(dateFormat, year+"-01-01")
 	if err != nil {
 		return err

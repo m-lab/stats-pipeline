@@ -39,11 +39,10 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			ExportQueryFile:    "testdata/test_export.sql",
 			Dataset:            "test",
 			Table:              "testtable",
-			PartitionField:     "test_hash",
 		},
 	}
 
-	newHistogramTable = func(name, ds, query, partitionField string,
+	newHistogramTable = func(name, ds, query string,
 		client bqiface.Client) HistogramTable {
 		return &mockHistogramTable{}
 	}

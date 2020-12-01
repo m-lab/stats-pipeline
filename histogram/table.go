@@ -24,21 +24,19 @@ type Table struct {
 
 	// query is the generating query for this Table
 	query string
-	// partitionField is the field to partition the table on.
-	partitionField string
+
 	// client is the BigQuery client to use.
 	client bqiface.Client
 }
 
 // NewTable returns a new Table with the specified destination table, query
 // and BQ client.
-func NewTable(name string, ds string, query string, partitionField string,
+func NewTable(name string, ds string, query string,
 	client bqiface.Client) *Table {
 	return &Table{
-		Table:          client.Dataset(ds).Table(name),
-		query:          query,
-		partitionField: partitionField,
-		client:         client,
+		Table:  client.Dataset(ds).Table(name),
+		query:  query,
+		client: client,
 	}
 }
 
