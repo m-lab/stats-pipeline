@@ -1,9 +1,9 @@
 #standardSQL
 WITH
-# Generate equal sized buckets in log-space between near 0 and 10Gbps
+# Generate equal sized buckets in log-space between near 0 Mbps and ~1 Gbps+
 buckets AS (
-  SELECT POW(10, x-.2) AS bucket_left, POW(10,x) AS bucket_right
-  FROM UNNEST(GENERATE_ARRAY(-5, 4.2, .2)) AS x
+  SELECT POW(10, x-.5) AS bucket_left, POW(10,x) AS bucket_right
+  FROM UNNEST(GENERATE_ARRAY(0, 3.5, .5)) AS x
 ),
 counties AS (
   SELECT
@@ -25,7 +25,6 @@ dl AS (
     date,
     counties.GEOID AS GEOID,
     CONCAT(client.Geo.CountryCode,"-",client.Geo.region) AS state,
-    client.Network.ASNumber AS asn,
     NET.SAFE_IP_FROM_STRING(client.IP) AS ip,
     a.MeanThroughputMbps AS mbps,
     a.MinRTT AS MinRTT
@@ -43,14 +42,12 @@ dl AS (
         client.Geo.Latitude
       ), counties.WKT
     )
-    AND a.MeanThroughputMbps != 0
 ),
 dl_stats_perip_perday AS (
   SELECT
     date,
     state,
     GEOID,
-    asn,
     ip,
     MIN(mbps) AS download_MIN,
     APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)] AS download_Q25,
@@ -60,14 +57,13 @@ dl_stats_perip_perday AS (
     MAX(mbps) AS download_MAX,
     APPROX_QUANTILES(MinRTT, 100) [SAFE_ORDINAL(50)] AS download_minRTT_MED
   FROM dl
-  GROUP BY date, state, GEOID, asn, ip
+  GROUP BY date, state, GEOID, ip
 ),
 dl_stats_perday AS (
   SELECT
     date,
     state,
     GEOID,
-    asn,
     MIN(download_MIN) AS download_MIN,
     APPROX_QUANTILES(download_Q25, 100) [SAFE_ORDINAL(25)] AS download_Q25,
     APPROX_QUANTILES(download_MED, 100) [SAFE_ORDINAL(50)] AS download_MED,
@@ -76,7 +72,7 @@ dl_stats_perday AS (
     MAX(download_MAX) AS download_MAX,
     APPROX_QUANTILES(download_minRTT_MED, 100) [SAFE_ORDINAL(50)] AS download_minRTT_MED
   FROM dl_stats_perip_perday
-  GROUP BY date, state, GEOID, asn
+  GROUP BY date, state, GEOID
 ),
 # Count the difference in the number of tests from the same IPs on the same
 #   day, to the number of tests used in the daily statistics.
@@ -85,37 +81,21 @@ dl_samples_total AS (
     date,
     COUNT(*) AS dl_total_samples,
     state,
-    GEOID,
-    asn
+    GEOID
   FROM dl
   GROUP BY
     date,
     state,
-    GEOID,
-    asn
-),
-dl_samples_stats AS (
-  SELECT
-    COUNT(*) AS dl_stats_samples,
-    date,
-    state,
-    GEOID,
-    asn
-  FROM dl_stats_perip_perday
-  GROUP BY
-    date,
-    state,
-    GEOID,
-    asn
+    GEOID
 ),
 # Count the samples that fall into each bucket and get frequencies
 dl_histogram AS (
   SELECT
     date,
     state,
-    GEOID,
-    asn,
-    bucket_left AS bucket_min,
+    GEOID
+    CASE WHEN bucket_left = 0.31622776601683794 THEN 0
+    ELSE bucket_left END AS bucket_min,
     bucket_right AS bucket_max,
     COUNTIF(download_MED < bucket_right AND download_MED >= bucket_left) AS dl_samples_bucket,
     COUNT(*) AS dl_samples_day,
@@ -125,7 +105,6 @@ dl_histogram AS (
     date,
     state,
     GEOID,
-    asn,
     bucket_min,
     bucket_max
 ),
@@ -135,7 +114,6 @@ ul AS (
     date,
     counties.GEOID AS GEOID,
     CONCAT(client.Geo.CountryCode,"-",client.Geo.Region) AS state,
-    client.Network.ASNumber AS asn,
     NET.SAFE_IP_FROM_STRING(client.IP) AS ip,
     a.MeanThroughputMbps AS mbps,
     a.MinRTT AS MinRTT
@@ -153,14 +131,12 @@ ul AS (
         client.Geo.Latitude
       ), counties.WKT
     )
-    AND a.MeanThroughputMbps != 0
 ),
 ul_stats_perip_perday AS (
   SELECT
     date,
     state,
     GEOID,
-    asn,
     ip,
     MIN(mbps) AS upload_MIN,
     APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
@@ -170,14 +146,13 @@ ul_stats_perip_perday AS (
     MAX(mbps) AS upload_MAX,
     APPROX_QUANTILES(MinRTT, 100) [SAFE_ORDINAL(50)] AS upload_minRTT_MED
   FROM ul
-  GROUP BY date, state, GEOID, asn, ip
+  GROUP BY date, state, GEOID, ip
 ),
 ul_stats_perday AS (
   SELECT
     date,
     state,
     GEOID,
-    asn,
     MIN(upload_MIN) AS upload_MIN,
     APPROX_QUANTILES(upload_Q25, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
     APPROX_QUANTILES(upload_MED, 100) [SAFE_ORDINAL(50)] AS upload_MED,
@@ -186,35 +161,19 @@ ul_stats_perday AS (
     MAX(upload_MAX) AS upload_MAX,
     APPROX_QUANTILES(upload_minRTT_MED, 100) [SAFE_ORDINAL(50)] AS upload_minRTT_MED
   FROM ul_stats_perip_perday
-  GROUP BY date, state, GEOID, asn
+  GROUP BY date, state, GEOID
 ),
 ul_samples_total AS (
   SELECT
     date,
     COUNT(*) AS ul_total_samples,
     state,
-    GEOID,
-    asn
+    GEOID
   FROM ul
   GROUP BY
     date,
     state,
-    GEOID,
-    asn
-),
-ul_samples_stats AS (
-  SELECT
-    COUNT(*) AS ul_stats_samples,
-    date,
-    state,
-    GEOID,
-    asn
-  FROM ul_stats_perip_perday
-  GROUP BY
-    date,
-    state,
-    GEOID,
-    asn
+    GEOID
 ),
 # Generate the histogram with samples per bucket and frequencies
 ul_histogram AS (
@@ -222,8 +181,8 @@ ul_histogram AS (
     date,
     state,
     GEOID,
-    asn,
-    bucket_left AS bucket_min,
+    CASE WHEN bucket_left = 0.31622776601683794 THEN 0
+    ELSE bucket_left END AS bucket_min,
     bucket_right AS bucket_max,
     COUNTIF(upload_MED < bucket_right AND upload_MED >= bucket_left) AS ul_samples_bucket,
     COUNT(*) AS ul_samples_day,
@@ -233,17 +192,14 @@ ul_histogram AS (
     date,
     state,
     GEOID,
-    asn,
     bucket_min,
     bucket_max
 )
 # Show the results
 SELECT *, MOD(ABS(FARM_FINGERPRINT(state)), 4000) as shard FROM dl_histogram
-JOIN ul_histogram USING (date, state, GEOID, asn, bucket_min, bucket_max)
-JOIN dl_stats_perday USING (date, state, GEOID, asn)
-JOIN ul_stats_perday USING (date, state, GEOID, asn)
+JOIN ul_histogram USING (date, state, GEOID, bucket_min, bucket_max)
+JOIN dl_stats_perday USING (date, state, GEOID)
+JOIN ul_stats_perday USING (date, state, GEOID)
 JOIN counties_noWKT USING (GEOID)
-JOIN dl_samples_total USING (date, state, GEOID, asn)
-JOIN ul_samples_total USING (date, state, GEOID, asn)
-JOIN dl_samples_stats USING (date, state, GEOID, asn)
-JOIN ul_samples_stats USING (date, state, GEOID, asn)
+JOIN dl_samples_total USING (date, state, GEOID)
+JOIN ul_samples_total USING (date, state, GEOID)
