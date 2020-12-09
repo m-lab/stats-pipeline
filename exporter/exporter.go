@@ -287,6 +287,7 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 	var lastRow bqRow
 	var currentRow bqRow
 	var err error
+	// Setting MaxSize here allows to fetch more rows with a single fetch.
 	it.PageInfo().MaxSize = 100000
 
 	for err = it.Next(&currentRow); err == nil; err = it.Next(&currentRow) {
@@ -302,10 +303,9 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 				}
 			}
 		}
-		// We are in the middle of a file, so just append the current
-		// row to currentFile. Fields that appear in the output path
-		// are removed to avoid redundancy in the JSON and create
-		// smaller files.
+		// We are in the middle or start of a file, so just append the current
+		// row to currentFile. Fields that appear in the output path are
+		// removed to avoid redundancy in the JSON and create smaller files.
 		currentFile = append(currentFile, removeFieldsFromRow(currentRow, j.fields))
 		lastRow = currentRow
 	}
