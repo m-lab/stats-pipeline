@@ -12,28 +12,31 @@ import (
 )
 
 const (
-	dateFormat    = "2006-01-02"
-	deleteRowsTpl = "DELETE FROM {{.Table}} WHERE date BETWEEN \"{{.Start}}\" AND \"{{.End}}\""
+	dateFormat     = "2006-01-02"
+	deleteRowsTpl  = "DELETE FROM {{.Table}} WHERE date BETWEEN \"{{.Start}}\" AND \"{{.End}}\""
+	partitionField = "shard"
 )
 
 // Table represents a bigquery table containing histogram data.
 // It embeds bigquery.Table and extends it with an UpdateHistogram method.
 type Table struct {
 	bqiface.Table
-	// Query is the generating query for this Table
-	Query string
 
-	// Client is the BigQuery client to use.
-	Client bqiface.Client
+	// query is the generating query for this Table
+	query string
+
+	// client is the BigQuery client to use.
+	client bqiface.Client
 }
 
 // NewTable returns a new Table with the specified destination table, query
 // and BQ client.
-func NewTable(name string, ds string, query string, client bqiface.Client) *Table {
+func NewTable(name string, ds string, query string,
+	client bqiface.Client) *Table {
 	return &Table{
 		Table:  client.Dataset(ds).Table(name),
-		Query:  query,
-		Client: client,
+		query:  query,
+		client: client,
 	}
 }
 
@@ -45,8 +48,6 @@ func (t *Table) queryConfig(query string) bqiface.QueryConfig {
 
 // deleteRows removes rows where date is within the provided range.
 func (t *Table) deleteRows(ctx context.Context, start, end time.Time) error {
-	// TODO: partition table and delete per-day partitions, which is likely
-	// much more efficient.
 	tpl := template.Must(template.New("query").Parse(deleteRowsTpl))
 	q := &bytes.Buffer{}
 	err := tpl.Execute(q, map[string]string{
@@ -58,10 +59,11 @@ func (t *Table) deleteRows(ctx context.Context, start, end time.Time) error {
 		return err
 	}
 	log.Printf("Deleting existing histogram rows: %s\n", q.String())
-	query := t.Client.Query(q.String())
+	query := t.client.Query(q.String())
 	_, err = query.Read(ctx)
 	if err != nil {
-		return err
+		// This can happen if, for example, the table hasn't been created yet.
+		log.Printf("Warning: cannot remove previous rows (%v)", err)
 	}
 
 	return nil
@@ -80,7 +82,16 @@ func (t *Table) UpdateHistogram(ctx context.Context, start, end time.Time) error
 	}
 
 	// Configure the histogram generation query.
-	qc := t.queryConfig(t.Query)
+	qc := t.queryConfig(t.query)
+	qc.RangePartitioning = &bigquery.RangePartitioning{
+		Field: partitionField,
+		Range: &bigquery.RangePartitioningRange{
+			Start:    0,
+			End:      3999,
+			Interval: 1,
+		},
+	}
+
 	qc.Dst = t.Table
 	qc.WriteDisposition = bigquery.WriteAppend
 	qc.Parameters = []bigquery.QueryParameter{
@@ -93,7 +104,7 @@ func (t *Table) UpdateHistogram(ctx context.Context, start, end time.Time) error
 			Value: end.Format(dateFormat),
 		},
 	}
-	query := t.Client.Query(t.Query)
+	query := t.client.Query(t.query)
 	query.SetQueryConfig(qc)
 
 	// Run the histogram generation query.

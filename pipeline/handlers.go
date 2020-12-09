@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -16,8 +17,8 @@ import (
 const dateFormat = "2006-01-02"
 
 var (
-	newHistogramTable = func(name string, ds string,
-		query string, client bqiface.Client) HistogramTable {
+	newHistogramTable = func(name, ds, query string,
+		client bqiface.Client) HistogramTable {
 		return histogram.NewTable(name, ds, query, client)
 	}
 )
@@ -27,19 +28,19 @@ type HistogramTable interface {
 }
 
 type Exporter interface {
-	Export(context.Context, config.ExportConfig, *template.Template, string) error
+	Export(context.Context, config.Config, *template.Template, string) error
 }
 
 type Handler struct {
 	bqClient bqiface.Client
 	exporter Exporter
-	config   config.Config
+	config   map[string]config.Config
 
 	pipelineCanRun chan bool
 }
 
 func NewHandler(bqClient bqiface.Client, exporter Exporter,
-	config config.Config) *Handler {
+	config map[string]config.Config) *Handler {
 	pipelineCanRun := make(chan bool, 1)
 	pipelineCanRun <- true
 	return &Handler{
@@ -83,7 +84,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Update all the histogram tables.
-	for name, config := range h.config.Histograms {
+	for name, config := range h.config {
 		if r.Context().Err() != nil {
 			// If the request's context has been canceled, we must return here.
 			return
@@ -98,17 +99,17 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Export data to GCS.
-	for name, config := range h.config.Exports {
+	for name, config := range h.config {
 		if r.Context().Err() != nil {
 			// If the request's context has been canceled, we must return here.
 			return
 		}
 		log.Printf("Exporting %s...", name)
 		// Read query file
-		content, err := ioutil.ReadFile(config.QueryFile)
+		content, err := ioutil.ReadFile(config.ExportQueryFile)
 		if err != nil {
 			log.Printf("Cannot read query file %s, skipping (%v)",
-				config.QueryFile, err)
+				config.ExportQueryFile, err)
 			continue
 		}
 		selectTpl := template.Must(template.New(name).
@@ -118,12 +119,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) generateHistogramForYear(ctx context.Context,
-	config config.HistogramConfig, year string) error {
-	content, err := ioutil.ReadFile(config.QueryFile)
+	config config.Config, year string) error {
+	content, err := ioutil.ReadFile(config.HistogramQueryFile)
 	if err != nil {
 		return err
 	}
-	hist := newHistogramTable(config.Table, config.Dataset, string(content),
+	// Append year to the table name from the config.
+	table := fmt.Sprintf("%s_%s", config.Table, year)
+	hist := newHistogramTable(table, config.Dataset, string(content),
 		h.bqClient)
 	start, err := time.Parse(dateFormat, year+"-01-01")
 	if err != nil {
