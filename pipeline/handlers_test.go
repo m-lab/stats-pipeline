@@ -22,7 +22,7 @@ type mockExporter struct{}
 
 type mockHistogramTable struct{}
 
-func (ex *mockExporter) Export(context.Context, config.ExportConfig, *template.Template, string) error {
+func (ex *mockExporter) Export(context.Context, config.Config, *template.Template, string) error {
 	return nil
 }
 
@@ -33,24 +33,17 @@ func (h *mockHistogramTable) UpdateHistogram(context.Context, time.Time, time.Ti
 func TestHandler_ServeHTTP(t *testing.T) {
 	mc := &mockClient{}
 	me := &mockExporter{}
-	conf := config.Config{
-		Histograms: map[string]config.HistogramConfig{
-			"test": {
-				Dataset:   "test",
-				QueryFile: "testdata/test_histogram.sql",
-				Table:     "testtable",
-			},
-		},
-		Exports: map[string]config.ExportConfig{
-			"test": {
-				OutputPath:  "{{.test}}/output.json",
-				QueryFile:   "testdata/test_export.sql",
-				SourceTable: "testtable",
-			},
+	conf := map[string]config.Config{
+		"test": {
+			HistogramQueryFile: "testdata/test_histogram.sql",
+			ExportQueryFile:    "testdata/test_export.sql",
+			Dataset:            "test",
+			Table:              "testtable",
 		},
 	}
 
-	newHistogramTable = func(name string, ds string, query string, client bqiface.Client) HistogramTable {
+	newHistogramTable = func(name, ds, query string,
+		client bqiface.Client) HistogramTable {
 		return &mockHistogramTable{}
 	}
 
@@ -60,7 +53,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		r          *http.Request
 		bqClient   bqiface.Client
 		exporter   Exporter
-		config     config.Config
+		config     map[string]config.Config
 		statusCode int
 	}{
 		{
@@ -98,7 +91,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 func TestNewHandler(t *testing.T) {
 	mc := &mockClient{}
 	me := &mockExporter{}
-	config := config.Config{}
+	config := map[string]config.Config{}
 	h := NewHandler(mc, me, config)
 	if h == nil {
 		t.Errorf("NewHandler() returned nil")

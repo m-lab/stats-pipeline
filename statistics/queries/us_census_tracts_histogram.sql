@@ -267,3 +267,4 @@ JOIN dl_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOI
 JOIN ul_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
 JOIN dl_samples_total USING (date, state, state_name, tract_name, lsad_name, GEOID)
 JOIN ul_samples_total USING (date, state, state_name, tract_name, lsad_name, GEOID)
+

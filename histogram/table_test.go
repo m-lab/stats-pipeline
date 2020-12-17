@@ -190,15 +190,15 @@ func TestTable_UpdateHistogram(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			hist := &Table{
 				Table:  tt.client.Dataset("test_ds").Table("test_table"),
-				Query:  tt.query,
-				Client: tt.client,
+				query:  tt.query,
+				client: tt.client,
 			}
 			if err := hist.UpdateHistogram(context.Background(), start,
 				end); (err != nil) != tt.wantErr {
 				t.Errorf("Table.UpdateHistogram() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			if mockClient, ok := hist.Client.(*mockClient); ok {
+			if mockClient, ok := hist.client.(*mockClient); ok {
 				if tt.want != nil && !reflect.DeepEqual(mockClient.queries, tt.want) {
 					t.Errorf("UpdateHistogram(): expected %v, got %v", tt.want,
 						mockClient.queries)
