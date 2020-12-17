@@ -23,6 +23,7 @@ dl AS (
     tracts.state_name AS state_name,
     tracts.tract_name AS tract_name,
     tracts.lsad_name AS lsad_name,
+    client.Network.ASNumber AS asn,
     NET.SAFE_IP_FROM_STRING(client.IP) AS ip,
     a.MeanThroughputMbps AS mbps,
     a.MinRTT AS MinRTT
@@ -50,6 +51,7 @@ dl_stats_perip_perday AS (
     tract_name,
     lsad_name,
     GEOID,
+    asn,
     ip,
     MIN(mbps) AS download_MIN,
     APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)] AS download_Q25,
@@ -66,6 +68,7 @@ dl_stats_perip_perday AS (
     tract_name,
     lsad_name,
     GEOID,
+    asn,
     ip
 ),
 dl_stats_perday AS (
@@ -76,6 +79,7 @@ dl_stats_perday AS (
     tract_name,
     lsad_name,
     GEOID,
+    asn,
     MIN(download_MIN) AS download_MIN,
     APPROX_QUANTILES(download_Q25, 100) [SAFE_ORDINAL(25)] AS download_Q25,
     APPROX_QUANTILES(download_MED, 100) [SAFE_ORDINAL(50)] AS download_MED,
@@ -90,7 +94,8 @@ dl_stats_perday AS (
     state_name,
     tract_name,
     lsad_name,
-    GEOID
+    GEOID,
+    asn
 ),
 # Count the difference in the number of tests from the same IPs on the same
 #   day, to the number of tests used in the daily statistics.
@@ -102,7 +107,8 @@ dl_samples_total AS (
     state_name,
     tract_name,
     lsad_name,
-    GEOID
+    GEOID,
+    asn
   FROM dl
   GROUP BY
     date,
@@ -110,7 +116,8 @@ dl_samples_total AS (
     state_name,
     tract_name,
     lsad_name,
-    GEOID
+    GEOID,
+    asn
 ),
 # Count the samples that fall into each bucket and get frequencies
 dl_histogram AS (
@@ -121,6 +128,7 @@ dl_histogram AS (
     tract_name,
     lsad_name,
     GEOID,
+    asn,
     CASE WHEN bucket_left = 0.31622776601683794 THEN 0
     ELSE bucket_left END AS bucket_min,
     bucket_right AS bucket_max,
@@ -135,6 +143,7 @@ dl_histogram AS (
     tract_name,
     lsad_name,
     GEOID,
+    asn,
     bucket_min,
     bucket_max
 ),
@@ -147,6 +156,7 @@ ul AS (
     tracts.state_name AS state_name,
     tracts.tract_name AS tract_name,
     tracts.lsad_name AS lsad_name,
+    client.Network.ASNumber AS asn,
     NET.SAFE_IP_FROM_STRING(client.IP) AS ip,
     a.MeanThroughputMbps AS mbps,
     a.MinRTT AS MinRTT
@@ -174,6 +184,7 @@ ul_stats_perip_perday AS (
     tract_name,
     lsad_name,
     GEOID,
+    asn,
     ip,
     MIN(mbps) AS upload_MIN,
     APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
@@ -190,6 +201,7 @@ ul_stats_perip_perday AS (
     tract_name,
     lsad_name,
     GEOID,
+    asn,
     ip
 ),
 ul_stats_perday AS (
@@ -200,6 +212,7 @@ ul_stats_perday AS (
     tract_name,
     lsad_name,
     GEOID,
+    asn,
     MIN(upload_MIN) AS upload_MIN,
     APPROX_QUANTILES(upload_Q25, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
     APPROX_QUANTILES(upload_MED, 100) [SAFE_ORDINAL(50)] AS upload_MED,
@@ -214,7 +227,8 @@ ul_stats_perday AS (
     state_name,
     tract_name,
     lsad_name,
-    GEOID
+    GEOID,
+    asn
 ),
 ul_samples_total AS (
   SELECT
@@ -224,7 +238,8 @@ ul_samples_total AS (
     state_name,
     tract_name,
     lsad_name,
-    GEOID
+    GEOID,
+    asn
   FROM ul
   GROUP BY
     date,
@@ -232,7 +247,8 @@ ul_samples_total AS (
     state_name,
     tract_name,
     lsad_name,
-    GEOID
+    GEOID,
+    asn
 ),
 # Generate the histogram with samples per bucket and frequencies
 ul_histogram AS (
@@ -243,6 +259,7 @@ ul_histogram AS (
     tract_name,
     lsad_name,
     GEOID,
+    asn,
     CASE WHEN bucket_left = 0.31622776601683794 THEN 0
     ELSE bucket_left END AS bucket_min,
     bucket_right AS bucket_max,
@@ -257,14 +274,14 @@ ul_histogram AS (
     tract_name,
     lsad_name,
     GEOID,
+    asn,
     bucket_min,
     bucket_max
 )
 # Show the results
 SELECT *, MOD(ABS(FARM_FINGERPRINT(GEOID)), 4000) as shard FROM dl_histogram
-JOIN ul_histogram USING (date, state, state_name, tract_name, lsad_name, GEOID, bucket_min, bucket_max)
-JOIN dl_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
-JOIN ul_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOID)
-JOIN dl_samples_total USING (date, state, state_name, tract_name, lsad_name, GEOID)
-JOIN ul_samples_total USING (date, state, state_name, tract_name, lsad_name, GEOID)
-
+JOIN ul_histogram USING (date, state, state_name, tract_name, lsad_name, GEOID, asn, bucket_min, bucket_max)
+JOIN dl_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOID, asn)
+JOIN ul_stats_perday USING (date, state, state_name, tract_name, lsad_name, GEOID, asn)
+JOIN dl_samples_total USING (date, state, state_name, tract_name, lsad_name, GEOID, asn)
+JOIN ul_samples_total USING (date, state, state_name, tract_name, lsad_name, GEOID, asn)
