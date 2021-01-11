@@ -34,11 +34,11 @@ spec:
             port: prometheus-port
         # Note: This service runs with unlimited resources and must be run on
         # a dedicated GKE node.
-        nodeSelector:
-          stats-pipeline-node: true
         volumeMounts:
         - name: config-volume
           mountPath: /etc/stats-pipeline
+      nodeSelector:
+          stats-pipeline-node: true
       volumes:
       - name: config-volume
         configMap:
