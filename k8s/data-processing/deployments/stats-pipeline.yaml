@@ -16,14 +16,12 @@ spec:
     spec:
       containers:
       - name: stats-pipeline
-        image: measurementlab/stats-pipeline:v0.1.0
+        image: gcr.io/{{GCLOUD_PROJECT}}/stats-pipeline
         env:
           - name: PROJECT
             value: "{{GCLOUD_PROJECT}}"
           - name: CONFIG
-            value: "/etc/config.json"
-          - name: GOOGLE_APPLICATION_CREDENTIALS
-            value: "/var/secrets/stats-pipeline.json"
+            value: "/etc/stats-pipeline/config.json"
         ports:
           # This is so Prometheus can be scraped.
           - name: prometheus-port
@@ -36,15 +34,12 @@ spec:
             port: prometheus-port
         # Note: This service runs with unlimited resources and must be run on
         # a dedicated GKE node.
+        nodeSelector:
+          stats-pipeline-node: true
         volumeMounts:
         - name: config-volume
-          mountPath: /etc/config.json
-        - name: credentials
-          mountPath: /var/secrets/
+          mountPath: /etc/stats-pipeline
       volumes:
       - name: config-volume
         configMap:
           name: stats-pipeline-config
-      - name: credentials
-          defaultMode: 420
-          secretName: stats-pipeline-credentials
