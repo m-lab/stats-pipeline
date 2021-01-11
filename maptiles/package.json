@@ -1,0 +1,18 @@
+{
+  "name": "maptiles",
+  "version": "1.0.0",
+  "description": "This pipeline generates a vector tileset for the map tab on the admin interface. It pulls data from the Census, the FCC, and Measurement Lab, creates the tileset, and uploads it to Google Cloud Storage. It runs to completion with `make piecewise`.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "csv": "^5.3.2",
+    "p-queue": "^6.6.2",
+    "wget-improved": "^3.2.1",
+    "sqlite3": "5.0.0",
+    "sqlite": "^4.0.14"
+  }
+}
