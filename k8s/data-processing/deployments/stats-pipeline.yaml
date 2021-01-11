@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stats-pipeline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: stats-pipeline
+  template:
+    metadata:
+      labels:
+        run: stats-pipeline
+      annotations:
+        prometheus.io/scrape: 'true'
+    spec:
+      containers:
+      - name: stats-pipeline
+        image: measurementlab/stats-pipeline:v0.1.0
+        env:
+          - name: PROJECT
+            value: "{{GCLOUD_PROJECT}}"
+          - name: CONFIG
+            value: "/etc/config.json"
+          - name: GOOGLE_APPLICATION_CREDENTIALS
+            value: "/var/secrets/stats-pipeline.json"
+        ports:
+          # This is so Prometheus can be scraped.
+          - name: prometheus-port
+            containerPort: 9990
+          - name: service-port
+            containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: prometheus-port
+        # Note: This service runs with unlimited resources and must be run on
+        # a dedicated GKE node.
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/config.json
+        - name: credentials
+          mountPath: /var/secrets/
+      volumes:
+      - name: config-volume
+        configMap:
+          name: stats-pipeline-config
+      - name: credentials
+          defaultMode: 420
+          secretName: stats-pipeline-credentials
