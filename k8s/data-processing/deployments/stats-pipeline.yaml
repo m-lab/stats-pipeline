@@ -16,6 +16,8 @@ spec:
     spec:
       containers:
       - name: stats-pipeline
+        # The exact image to be deployed is replaced by gke-deploy, this is
+        # a placeholder.
         image: gcr.io/{{GCLOUD_PROJECT}}/stats-pipeline
         env:
           - name: PROJECT
@@ -32,8 +34,11 @@ spec:
           httpGet:
             path: /metrics
             port: prometheus-port
-        # Note: This service runs with unlimited resources and must be run on
-        # a dedicated GKE node.
+        # Note: This service runs on a dedicated 8-CPU node.
+        resources:
+          limits:
+            cpu: "8"
+            memory: "16Gi"
         volumeMounts:
         - name: config-volume
           mountPath: /etc/stats-pipeline
