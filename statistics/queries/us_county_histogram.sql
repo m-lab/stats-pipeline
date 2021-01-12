@@ -93,7 +93,7 @@ dl_histogram AS (
   SELECT
     date,
     state,
-    GEOID
+    GEOID,
     CASE WHEN bucket_left = 0.31622776601683794 THEN 0
     ELSE bucket_left END AS bucket_min,
     bucket_right AS bucket_max,

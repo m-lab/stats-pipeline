@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stats-pipeline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: stats-pipeline
+  template:
+    metadata:
+      labels:
+        run: stats-pipeline
+      annotations:
+        prometheus.io/scrape: 'true'
+    spec:
+      containers:
+      - name: stats-pipeline
+        # The exact image to be deployed is replaced by gke-deploy, this is
+        # a placeholder.
+        image: gcr.io/{{GCLOUD_PROJECT}}/stats-pipeline
+        env:
+          - name: PROJECT
+            value: "{{GCLOUD_PROJECT}}"
+          - name: CONFIG
+            value: "/etc/stats-pipeline/config.json"
+          - name: BUCKET
+            value: "statistics-{{GCLOUD_PROJECT}}"
+        ports:
+          # This is so Prometheus can be scraped.
+          - name: prometheus-port
+            containerPort: 9990
+          - name: service-port
+            containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: prometheus-port
+        # Note: This service runs on a dedicated 8-CPU node.
+        resources:
+          limits:
+            cpu: "8"
+            memory: "30Gi"
+          requests:
+            cpu: "0.5"
+            memory: "2Gi"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/stats-pipeline
+      nodeSelector:
+        stats-pipeline-node: 'true'
+      volumes:
+      - name: config-volume
+        configMap:
+          name: stats-pipeline-config
