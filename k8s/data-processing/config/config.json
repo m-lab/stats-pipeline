@@ -14,14 +14,14 @@
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .year }}/histogram_daily_stats.json"
     },
     "regions": {
-        "histogramQueryFile": "statistics/queries/countinent_country_region_histogram.sql",
+        "histogramQueryFile": "statistics/queries/continent_country_region_histogram.sql",
         "exportQueryFile": "statistics/exports/regions.sql",
         "dataset": "statistics",
         "table": "regions",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .year }}/histogram_daily_stats.json"
     },
     "cities": {
-        "histogramQueryFile": "statistics/queries/countinent_country_region_city_histogram.sql",
+        "histogramQueryFile": "statistics/queries/continent_country_region_city_histogram.sql",
         "exportQueryFile": "statistics/exports/cities.sql",
         "dataset": "statistics",
         "table": "cities",
