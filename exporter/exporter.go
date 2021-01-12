@@ -297,7 +297,7 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 			for _, f := range j.fields {
 				if currentRow[f] != lastRow[f] {
 					// upload file, empty currentFile, break
-					exporter.uploadFile(j, currentFile)
+					exporter.uploadFile(j, currentFile, lastRow)
 					currentFile = currentFile[:0]
 					break
 				}
@@ -312,7 +312,7 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 
 	if err == iterator.Done {
 		// If this was the last row, upload the file so far.
-		exporter.uploadFile(j, currentFile)
+		exporter.uploadFile(j, currentFile, lastRow)
 		// This is the expected behavior, so we don't consider this an error.
 		return nil
 	}
@@ -323,13 +323,13 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 // uploadFile marshals the BigQuery rows and uploads the resulting JSON to the
 // GCS path defined in the QueryJob. Template variables are taken from the
 // first row in the slice.
-func (exporter *JSONExporter) uploadFile(j *QueryJob, rows []bqRow) error {
+func (exporter *JSONExporter) uploadFile(j *QueryJob, rows []bqRow, lastRow bqRow) error {
 	if len(rows) == 0 {
 		return errors.New("empty rows slice")
 	}
 	buf := new(bytes.Buffer)
 	// Use the first row to fill in the template variables.
-	err := j.outputPath.Execute(buf, rows[0])
+	err := j.outputPath.Execute(buf, lastRow)
 	if err != nil {
 		return err
 	}
