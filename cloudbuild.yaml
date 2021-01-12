@@ -1,44 +1,42 @@
 steps:
-  # build the container image
 - name: "gcr.io/cloud-builders/docker"
   id: "Build the docker container"
   args: ["build", "-t", "gcr.io/$PROJECT_ID/stats-pipeline:$_TAG", "."]
-  # push container image
+
 - name: "gcr.io/cloud-builders/docker"
   id: "Push the docker container to gcr.io"
   args: ["push", "gcr.io/$PROJECT_ID/stats-pipeline:$_TAG"]
 
-- name: 'gcr.io/cloud-builders/kubectl'
-  id: Create configmap manifest
-  entrypoint: 'bash'
+- name: "gcr.io/cloud-builders/kubectl"
+  id: "Create configmap manifest"
+  entrypoint: /bin/bash
   args:
-    - '-c'
+    - -c
     - |
       kubectl create configmap stats-pipeline-config \
       --from-file=k8s/data-processing/config/config.json -o yaml --dry-run > \
       configmap-manifest.json
 
-- name: 'gcr.io/cloud-builders/kubectl'
-  id: Apply configmap
+- name: "gcr.io/cloud-builders/kubectl"
+  id: "Apply configmap"
   args:
     - apply
     - -f
     - configmap-manifest.json
   env:
-  - 'CLOUDSDK_COMPUTE_REGION=us-east1'
-  - 'CLOUDSDK_CONTAINER_CLUSTER=data-processing'
+  - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
+  - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
 
 - name: "gcr.io/cloud-builders/gcloud"
-  id: Generate manifest for stats-pipeline deployment
+  id: "Generate manifest for stats-pipeline deployment"
   entrypoint: /bin/sh
   args:
-  - '-c'
+  - -c
   - |
     sed 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
     k8s/data-processing/deployments/stats-pipeline.yaml > \
     manifest.yaml
 
-  # deploy container image to GKE
 - name: "gcr.io/cloud-builders/gke-deploy"
   id: "Create stats-pipeline deployment"
   args:
