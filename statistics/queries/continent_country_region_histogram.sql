@@ -220,4 +220,4 @@ JOIN ul_histogram USING (date, continent_code, country_code, ISO3166_2region1, b
 JOIN dl_stats_per_day USING (date, continent_code, country_code, ISO3166_2region1)
 JOIN ul_stats_per_day USING (date, continent_code, country_code, ISO3166_2region1)
 JOIN dl_samples_total USING (date, continent_code, country_code, ISO3166_2region1)
-JOIN ul_samples_total USING (date, continent_code, country_code, ISO3166_2region)
+JOIN ul_samples_total USING (date, continent_code, country_code, ISO3166_2region1)
