@@ -24,6 +24,8 @@ spec:
             value: "{{GCLOUD_PROJECT}}"
           - name: CONFIG
             value: "/etc/stats-pipeline/config.json"
+          - name: BUCKET
+            value: "statistics-{{GCLOUD_PROJECT}}"
         ports:
           # This is so Prometheus can be scraped.
           - name: prometheus-port
