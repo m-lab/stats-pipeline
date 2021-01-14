@@ -1,4 +1,4 @@
-# A ClusterIP service to make stats-pipeline available from other pods.
+# A ClusterIP service to make stats-pipeline available to other pods.
 apiVersion: v1
 kind: Service
 metadata:
