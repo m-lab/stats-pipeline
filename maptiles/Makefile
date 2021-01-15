@@ -48,6 +48,10 @@ census/tract-demographics-acs-5.csv:
 	mkdir -p census
 	gsutil -m cp gs://${GCS_BUCKET}/census/tract-demographics-acs-5.csv census/
 
+census/tract-internet-acs-5.csv:
+	mkdir -p census
+	gsutil -m cp gs://${GCS_BUCKET}/census/tract-internet-acs-5.csv census/
+
 # dowload fcc 477 sqlite database from GCS
 fcc-477.sqlite:
 	gsutil -m cp gs://${GCS_BUCKET}/fcc/201906/fcc-477.sqlite fcc-477.sqlite
