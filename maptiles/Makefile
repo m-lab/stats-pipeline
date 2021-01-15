@@ -39,20 +39,20 @@ census-gcs:
 	mkdir -p census
 	gsutil cp gs://${GCS_BUCKET}/census/* census/
 
-fcc-gcs:
+fcc/fbd_us_without_satellite_jun2019_v2.csv:
 	mkdir -p fcc/
-	gsutil cp gs://${GCS_BUCKET}/fcc/* fcc/
+	gsutil cp -r gs://${GCS_BUCKET}/fcc/201906/fbd_us_without_satellite_jun2019_v2.csv fcc/
 
 # this is just to make this file smaller and easier to deal
 # with. the source file is some 29M rows
-fcc/test.csv: fcc
-	head -n 5000 fcc/477-without-satellite-june-2019.csv > fcc/test.csv
+fcc/test.csv: fbd_us_without_satellite_jun2019_v2.csv
+	head -n 5000 fcc/fbd_us_without_satellite_jun2019_v2.csv > fcc/test.csv
 
 # load fcc 477 into sqlite so that we can easily
 # query it by different geography types
-fcc-477.sqlite: fcc-gcs
+fcc-477.sqlite: fcc/fbd_us_without_satellite_jun2019_v2.csv
 	rm -f fcc-477.sqlite
-	node scripts/load-fcc-477-to-db.js fcc/477-without-satellite-june-2019.csv
+	node scripts/load-fcc-477-to-db.js fcc/fbd_us_without_satellite_jun2019_v2.csv
 
 # summarize 477 data by block
 fcc-block.json: fcc-477.sqlite
@@ -158,7 +158,7 @@ tracts-geo-with-fcc-mlab.json: tracts-geo-with-fcc.json mlab-tracts.json
 counties.mbtiles: counties-geo-with-census-fcc-mlab.json
 	tippecanoe -z12 -f -o counties.mbtiles -l counties counties-geo-with-census-fcc-mlab.json
 
-states.mbtiles: geographies
+states.mbtiles: geographies-gcs
 	tippecanoe -z12 -f -o states.mbtiles -l states geographies/states-geo.json
 
 tracts.mbtiles: tracts-geo-with-fcc-mlab.json
