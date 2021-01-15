@@ -1,6 +1,7 @@
 const fs = require('fs');
 
-const { median, nest } = require('d3');
+const { median } = require('d3');
+const { nest } = require('d3-collection')
 const glob = require('glob');
 const { default: Queue } = require('p-queue');
 
