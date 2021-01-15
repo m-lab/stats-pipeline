@@ -50,7 +50,7 @@ fcc/test.csv: fcc
 
 # load fcc 477 into sqlite so that we can easily
 # query it by different geography types
-fcc-477.sqlite: fcc
+fcc-477.sqlite: fcc-gcs
 	rm -f fcc-477.sqlite
 	node scripts/load-fcc-477-to-db.js fcc/477-without-satellite-june-2019.csv
 

@@ -24,7 +24,7 @@ FROM google/cloud-sdk:alpine
 COPY --from=build-tippecanoe /usr/local/bin/tippecanoe /usr/local/bin/tippecanoe
 
 # Make sure we have make, nodejs/npm and tippecanoe's dependencies.
-RUN apk add --no-cache libstdc++ sqlite-libs make nodejs npm
+RUN apk add --no-cache libstdc++ sqlite-libs make nodejs npm ca-certificates
 
 COPY ./ /home/node
 WORKDIR /home/node
