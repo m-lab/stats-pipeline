@@ -1,7 +1,4 @@
-
-# GCS bucket where to upload the results.
 GCS_BUCKET=maptiles-mlab-sandbox
-
 # download the block level shapefiles from the census
 # they serve them as a single zip per state so we have
 # to download them, unzip them, & convert them to geojson
@@ -31,28 +28,25 @@ geographies/tracts: geographies/blocks/.downloaded
 geographies/tracts-geo.json: geographies/tracts
 	mapshaper -i geographies/tracts/*.json merge-files -each 'fips = STATEFP10 + "" + COUNTYFP10 + TRACTCE10' -o geographies/tracts-geo.json format=geojson
 
-geographies-gcs:
+geographies/states-geo.json:
 	mkdir -p geographies
-	gsutil -m cp gs://${GCS_BUCKET}/geographies/* geographies/
+	gsutil -m cp gs://${GCS_BUCKET}/geographies/states-geo.json geographies/
 
-census-gcs:
+geographies/counties-geo.json:
+	mkdir -p geographies
+	gsutil -m cp gs://${GCS_BUCKET}/geographies/counties-geo.json geographies/
+
+census/county-demographics-acs-5.csv:
 	mkdir -p census
-	gsutil cp gs://${GCS_BUCKET}/census/* census/
+	gsutil -m cp gs://${GCS_BUCKET}/census/county-demographics-acs-5.csv census/
 
-fcc/fbd_us_without_satellite_jun2019_v2.csv:
-	mkdir -p fcc/
-	gsutil cp -r gs://${GCS_BUCKET}/fcc/201906/fbd_us_without_satellite_jun2019_v2.csv fcc/
+census/county-internet-acs-5.csv:
+	mkdir -p census
+	gsutil -m cp gs://${GCS_BUCKET}/census/county-internet-acs-5.csv census/
 
-# this is just to make this file smaller and easier to deal
-# with. the source file is some 29M rows
-fcc/test.csv: fbd_us_without_satellite_jun2019_v2.csv
-	head -n 5000 fcc/fbd_us_without_satellite_jun2019_v2.csv > fcc/test.csv
-
-# load fcc 477 into sqlite so that we can easily
-# query it by different geography types
-fcc-477.sqlite: fcc/fbd_us_without_satellite_jun2019_v2.csv
-	rm -f fcc-477.sqlite
-	node scripts/load-fcc-477-to-db.js fcc/fbd_us_without_satellite_jun2019_v2.csv
+# dowload fcc 477 sqlite database from GCS
+fcc-477.sqlite:
+	gsutil -m cp gs://${GCS_BUCKET}/fcc/201906/fcc-477.sqlite fcc-477.sqlite
 
 # summarize 477 data by block
 fcc-block.json: fcc-477.sqlite
@@ -64,7 +58,7 @@ fcc-county.json: fcc-477.sqlite
 
 # summarize 477 data by tract
 fcc-tract.json: fcc-477.sqlite
-	node scripts/process-fcc.js tract
+	node --max-old-space-size=4096 scripts/process-fcc.js tract
 
 # download mlab statistics from gcs
 mlab/counties/.downloaded:
@@ -85,7 +79,7 @@ mlab-tracts.json: mlab/tracts/.downloaded
 	node scripts/process-mlab.js tracts
 
 # merge county data with census demographic information
-counties-geo-with-demographics.json: geographies-gcs census-gcs
+counties-geo-with-demographics.json: geographies/counties-geo.json census/county-demographics-acs-5.csv
 	mapshaper geographies/counties-geo.json \
 		-join census/county-demographics-acs-5.csv keys=fips,geo_id field-types=fips:str,geo_id:str \
 		-each 'white_pct=white_pop / total_pop' \
@@ -97,7 +91,7 @@ counties-geo-with-demographics.json: geographies-gcs census-gcs
 		counties-geo-with-demographics.json
 
 # merge the above county file with acs internet info
-counties-geo-with-census.json: counties-geo-with-demographics.json census-gcs
+counties-geo-with-census.json: counties-geo-with-demographics.json census/county-internet-acs-5.csv
 	mapshaper counties-geo-with-demographics.json \
 		-join census/county-internet-acs-5.csv keys=fips,fips field-types=fips:str,fips:str \
 		-o format=geojson \
@@ -122,7 +116,7 @@ counties-geo-with-census-fcc-mlab.json: counties-geo-with-census-fcc.json mlab-c
 # and do the same thing for tracts
 
 # merge tract data with census demographic information
-tracts-geo-with-demographics.json: geographies-gcs census-gcs
+tracts-geo-with-demographics.json: geographies/tracts-geo.json census/tract-demographics-acs-5.csv
 	mapshaper geographies/tracts-geo.json \
 		-join census/tract-demographics-acs-5.csv keys=fips,geo_id field-types=fips:str,geo_id:str \
 		-each 'white_pct=white_pop / total_pop' \
@@ -133,7 +127,7 @@ tracts-geo-with-demographics.json: geographies-gcs census-gcs
 		-o format=geojson \
 		tracts-geo-with-demographics.json
 
-tracts-geo-with-census.json: tracts-geo-with-demographics.json census-gcs
+tracts-geo-with-census.json: tracts-geo-with-demographics.json census/tract-internet-acs-5.csv
 	mapshaper tracts-geo-with-demographics.json \
 		-join census/tract-internet-acs-5.csv keys=fips,fips field-types=fips:str,fips:str \
 		-o format=geojson \
@@ -158,7 +152,7 @@ tracts-geo-with-fcc-mlab.json: tracts-geo-with-fcc.json mlab-tracts.json
 counties.mbtiles: counties-geo-with-census-fcc-mlab.json
 	tippecanoe -z12 -f -o counties.mbtiles -l counties counties-geo-with-census-fcc-mlab.json
 
-states.mbtiles: geographies-gcs
+states.mbtiles: geographies/states-geo.json
 	tippecanoe -z12 -f -o states.mbtiles -l states geographies/states-geo.json
 
 tracts.mbtiles: tracts-geo-with-fcc-mlab.json

@@ -10,9 +10,10 @@
   "license": "ISC",
   "dependencies": {
     "csv": "^5.3.2",
+    "d3": "^6.3.1",
     "p-queue": "^6.6.2",
-    "wget-improved": "^3.2.1",
+    "sqlite": "^4.0.14",
     "sqlite3": "5.0.0",
-    "sqlite": "^4.0.14"
+    "wget-improved": "^3.2.1"
   }
 }

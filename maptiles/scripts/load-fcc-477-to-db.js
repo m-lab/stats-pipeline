@@ -17,6 +17,16 @@ const dbFileName = `./fcc-477.sqlite`;
     `CREATE TABLE rows(block_fips TEXT,tract_fips TEXT,county_fips TEXT,max_ad_down,max_ad_up,provider_id);`,
   );
 
+  // Optimizations
+  await db.run(
+    `PRAGMA synchronous = OFF`,
+  );
+
+  await db.run(
+    `BEGIN TRANSACTION`,
+  );
+
+  let insertStmt = await db.prepare("INSERT INTO rows (block_fips,tract_fips,county_fips,max_ad_down,max_ad_up,provider_id) VALUES (?,?,?,?,?,?)");
   let rowCount = 0;
 
   async function processRow(row, cb) {
@@ -30,8 +40,7 @@ const dbFileName = `./fcc-477.sqlite`;
     const countyFips = blockCode.slice(0, 5);
 
     try {
-      const sql = `INSERT INTO rows (block_fips,tract_fips,county_fips,max_ad_down,max_ad_up,provider_id) VALUES ("${blockCode}","${tractFips}","${countyFips}",${+maxAdDown},${+maxAdUp},${providerId})`;
-      await db.run(sql);
+      await insertStmt.run(blockCode, tractFips, countyFips, maxAdDown, maxAdUp, providerId);
       rowCount += 1;
       if (rowCount % 100000 === 0) {
         console.log(`Stored ${rowCount} rows in the database`);
@@ -54,6 +63,10 @@ const dbFileName = `./fcc-477.sqlite`;
     await db.run(`CREATE INDEX block_fips_index ON rows (block_fips);`);
     await db.run(`CREATE INDEX county_fips_index ON rows (county_fips);`);
     await db.run(`CREATE INDEX tract_fips_index ON rows (tract_fips);`);
+    await db.run(
+      `END TRANSACTION`,
+    );
+    insertStmt.finalize();
     console.log(`Generated ${dbFileName}`);
   });
 
