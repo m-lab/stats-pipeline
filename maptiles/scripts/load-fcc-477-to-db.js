@@ -21,10 +21,10 @@ const dbFileName = `./fcc-477.sqlite`;
 
   async function processRow(row, cb) {
     const consumer = row['Consumer'];
-    const providerId = row['Provider ID'];
-    const blockCode = row['Census Block FIPS Code'];
-    const maxAdDown = row['Max Advertised Downstream Speed (mbps)'];
-    const maxAdUp = row['Max Advertised Upstream Speed (mbps)'];
+    const providerId = row['Provider_Id'];
+    const blockCode = row['BlockCode'];
+    const maxAdDown = row['MaxAdDown'];
+    const maxAdUp = row['MaxAdUp'];
     if (consumer !== '1') return cb(null);
     const tractFips = blockCode.slice(0, 11);
     const countyFips = blockCode.slice(0, 5);
