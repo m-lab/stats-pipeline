@@ -58,7 +58,7 @@ fcc-county.json: fcc-477.sqlite
 
 # summarize 477 data by tract
 fcc-tract.json: fcc-477.sqlite
-	node --max-old-space-size=4096 scripts/process-fcc.js tract
+	node scripts/process-fcc.js tract
 
 # download mlab statistics from gcs
 mlab/counties/.downloaded:
