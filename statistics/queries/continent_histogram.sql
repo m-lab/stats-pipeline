@@ -10,69 +10,70 @@ dl_per_location AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
+    id,
     a.MeanThroughputMbps AS mbps,
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_downloads`
-  WHERE date BETWEEN @startdate AND @enddate
+  WHERE date BETWEEN #@startdate AND @enddate
+                      "2020-01-01" AND "2020-12-31"
   AND a.MeanThroughputMbps != 0
 ),
 # With good locations and valid IPs
 dl_per_location_cleaned AS (
-  SELECT
-    date,
-    continent_code,
-    mbps,
-    MinRTT,
-    ip
-  FROM dl_per_location
+  SELECT * FROM dl_per_location
   WHERE
     continent_code IS NOT NULL
     AND continent_code != ""
     AND ip IS NOT NULL
 ),
-# Gather descriptive statistics per geo, day, per ip
-dl_stats_perip_perday AS (
+
+# Gather rows per day and ip
+dl_rows_perip_perday AS (
   SELECT
     date,
     continent_code,
     ip,
-    MIN(mbps) AS download_MIN,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)] AS download_Q25,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(50)] AS download_MED,
-    AVG(mbps) AS download_AVG,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)] AS download_Q75,
-    MAX(mbps) AS download_MAX,
-    APPROX_QUANTILES(MinRTT, 100) [SAFE_ORDINAL(50)] AS download_minRTT_MED
+    # This organizes all tests, in an arbitrary but repeatable order.
+    ARRAY_AGG(STRUCT(ABS(FARM_FINGERPRINT(id)) AS ffid, mbps, MinRTT) ORDER BY ABS(FARM_FINGERPRINT(id))) AS members,
+    STRUCT(
+      ROUND(MIN(mbps),3) AS download_MIN,
+      ROUND(APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)],3) AS download_Q25,
+      ROUND(APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(50)],3) AS download_MED,
+      ROUND(POW(10,AVG(Safe.LOG10(mbps))),3) AS download_LOG_AVG,
+      ROUND(AVG(mbps),3) AS download_AVG,
+      ROUND(APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)],3) AS download_Q75,
+      ROUND(MAX(mbps),3) AS download_MAX,
+      ROUND(APPROX_QUANTILES(MinRTT, 100) [SAFE_ORDINAL(50)],3) AS download_minRTT_MED
+    ) AS stats
   FROM dl_per_location_cleaned
   GROUP BY date, continent_code, ip
+  --ORDER BY ip, date
 ),
-# Calculate final stats per day from 1x test per ip per day normalization in prev. step
-dl_stats_per_day AS (
+
+dl_random_perip_perday AS (
   SELECT
     date,
     continent_code,
-    MIN(download_MIN) AS download_MIN,
-    APPROX_QUANTILES(download_Q25, 100) [SAFE_ORDINAL(25)] AS download_Q25,
-    APPROX_QUANTILES(download_MED, 100) [SAFE_ORDINAL(50)] AS download_MED,
-    AVG(download_AVG) AS download_AVG,
-    APPROX_QUANTILES(download_Q75, 100) [SAFE_ORDINAL(75)] AS download_Q75,
-    MAX(download_MAX) AS download_MAX,
-    APPROX_QUANTILES(download_minRTT_MED, 100) [SAFE_ORDINAL(50)] AS download_minRTT_MED
-  FROM
-    dl_stats_perip_perday
-  GROUP BY date, continent_code
+    ip,
+    ARRAY_LENGTH(members) AS tests,
+    # Substitute any large, preferably prime number for 1234567 to get different sample
+    members[SAFE_OFFSET(MOD(1234567,ARRAY_LENGTH(members)))] AS random1,
+    members[SAFE_OFFSET(MOD(12345679,ARRAY_LENGTH(members)))] AS random2,
+    stats
+  FROM dl_rows_perip_perday
 ),
-# Count the difference in the number of tests from the same IPs on the same
-#   day, to the number of tests used in the daily statistics.
-dl_samples_total AS (
+
+# Calculate log average per day from random samples
+dl_stats_per_day AS (
   SELECT
-    COUNT(*) AS dl_total_samples,
-    date,
-    continent_code
-  FROM dl_per_location_cleaned
-  GROUP BY
-    date,
-    continent_code
+    date, continent_code,
+    ROUND(POW(10,AVG(Safe.LOG10(stats.download_MED))),3) AS dl_day_log_avg_median,
+    ROUND(POW(10,AVG(Safe.LOG10(random1.MinRtt))),3) AS dl_min_rtt_day_log_avg,
+    ROUND(POW(10,AVG(Safe.LOG10(random1.mbps))),3) AS dl_day_log_avg_random1,
+    ROUND(POW(10,AVG(Safe.LOG10(random2.mbps))),3) AS dl_day_log_avg_random2
+  FROM dl_random_perip_perday
+  GROUP BY continent_code, date
+  # ORDER BY continent_code, date
 ),
 # Count the samples that fall into each bucket and get frequencies
 dl_histogram AS (
@@ -82,10 +83,9 @@ dl_histogram AS (
     CASE WHEN bucket_left = 0.31622776601683794 THEN 0
     ELSE bucket_left END AS bucket_min,
     bucket_right AS bucket_max,
-    COUNTIF(download_MED < bucket_right AND download_MED >= bucket_left) AS dl_samples_bucket,
-    COUNT(*) AS dl_samples_day,
-    COUNTIF(download_MED < bucket_right AND download_MED >= bucket_left) / COUNT(*) AS dl_frac
-  FROM dl_stats_perip_perday CROSS JOIN buckets
+    COUNTIF(stats.download_MED < bucket_right AND stats.download_MED >= bucket_left) AS dl_samples_bucket,
+    ROUND(COUNTIF(stats.download_MED < bucket_right AND stats.download_MED >= bucket_left) / COUNT(*), 3) AS dl_frac_bucket
+  FROM dl_random_perip_perday CROSS JOIN buckets
   GROUP BY
     date,
     continent_code,
@@ -99,69 +99,70 @@ ul_per_location AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
+    id,
     a.MeanThroughputMbps AS mbps,
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_uploads`
-  WHERE date BETWEEN @startdate AND @enddate
+  WHERE date BETWEEN #@startdate AND @enddate
+                      "2020-01-01" AND "2020-12-31"
   AND a.MeanThroughputMbps != 0
 ),
 # With good locations and valid IPs
 ul_per_location_cleaned AS (
-  SELECT
-    date,
-    continent_code,
-    mbps,
-    MinRTT,
-    ip
-  FROM ul_per_location
+  SELECT * FROM ul_per_location
   WHERE
     continent_code IS NOT NULL AND continent_code != ""
     AND ip IS NOT NULL
 ),
-# Gather descriptive statistics per geo, day, per ip
-ul_stats_perip_perday AS (
+
+# Gather rows per day and ip
+ul_rows_perip_perday AS (
   SELECT
     date,
     continent_code,
     ip,
-    MIN(mbps) AS upload_MIN,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(50)] AS upload_MED,
-    AVG(mbps) AS upload_AVG,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)] AS upload_Q75,
-    MAX(mbps) AS upload_MAX,
-    APPROX_QUANTILES(MinRTT, 100) [SAFE_ORDINAL(50)] AS upload_minRTT_MED
+    # This organizes all tests, in an arbitrary but repeatable order.
+    ARRAY_AGG(STRUCT(ABS(FARM_FINGERPRINT(id)) AS ffid, mbps, MinRTT) ORDER BY ABS(FARM_FINGERPRINT(id))) AS members,
+    STRUCT(
+      ROUND(MIN(mbps),3) AS upload_MIN,
+      ROUND(APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)],3) AS upload_Q25,
+      ROUND(APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(50)],3) AS upload_MED,
+      ROUND(POW(10,AVG(Safe.LOG10(mbps))),3) AS upload_LOG_AVG,
+      ROUND(AVG(mbps),3) AS upload_AVG,
+      ROUND(MAX(mbps),3) AS upload_MAX,
+      ROUND(APPROX_QUANTILES(MinRTT, 100) [SAFE_ORDINAL(50)],3) AS upload_minRTT_MED
+    ) AS stats
   FROM ul_per_location_cleaned
   GROUP BY date, continent_code, ip
+  --ORDER BY ip, date
 ),
-# Calculate final stats per day from 1x test per ip per day normalization in prev. step
-ul_stats_per_day AS (
+
+ul_random_perip_perday AS (
   SELECT
     date,
     continent_code,
-    MIN(upload_MIN) AS upload_MIN,
-    APPROX_QUANTILES(upload_Q25, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
-    APPROX_QUANTILES(upload_MED, 100) [SAFE_ORDINAL(50)] AS upload_MED,
-    AVG(upload_AVG) AS upload_AVG,
-    APPROX_QUANTILES(upload_Q75, 100) [SAFE_ORDINAL(75)] AS upload_Q75,
-    MAX(upload_MAX) AS upload_MAX,
-    APPROX_QUANTILES(upload_minRTT_MED, 100) [SAFE_ORDINAL(50)] AS upload_minRTT_MED
-  FROM
-    ul_stats_perip_perday
-  GROUP BY date, continent_code
+    ip,
+    ARRAY_LENGTH(members) AS tests,
+    # Substitute any large, preferably prime number for 1234567 to get different sample
+    members[SAFE_OFFSET(MOD(1234567,ARRAY_LENGTH(members)))] AS random1,
+    members[SAFE_OFFSET(MOD(12345679,ARRAY_LENGTH(members)))] AS random2,
+    stats
+  FROM ul_rows_perip_perday
 ),
-# Show the total number of samples (all tests from all IPs)
-ul_samples_total AS (
+
+# Calculate log average per day from random samples
+ul_stats_per_day AS (
   SELECT
-    COUNT(*) AS ul_total_samples,
-    date,
-    continent_code
-  FROM ul_per_location_cleaned
-  GROUP BY
-    date,
-    continent_code
+    continent_code, date,
+    ROUND(POW(10,AVG(Safe.LOG10(stats.upload_MED))),3) AS ul_day_log_avg_median,
+    ROUND(POW(10,AVG(Safe.LOG10(random1.MinRtt))),3) AS ul_min_rtt_day_log_avg,
+    ROUND(POW(10,AVG(Safe.LOG10(random1.mbps))),3) AS ul_day_log_avg_random1,
+    ROUND(POW(10,AVG(Safe.LOG10(random2.mbps))),3) AS ul_day_log_avg_random2,
+  FROM ul_random_perip_perday
+  GROUP BY continent_code, date
+  # ORDER BY continent_code, date
 ),
-# Generate the histogram with samples per bucket and frequencies
+# Count the samples that fall into each bucket and get frequencies
 ul_histogram AS (
   SELECT
     date,
@@ -169,10 +170,9 @@ ul_histogram AS (
     CASE WHEN bucket_left = 0.31622776601683794 THEN 0
     ELSE bucket_left END AS bucket_min,
     bucket_right AS bucket_max,
-    COUNTIF(upload_MED < bucket_right AND upload_MED >= bucket_left) AS ul_samples_bucket,
-    COUNT(*) AS ul_samples_day,
-    COUNTIF(upload_MED < bucket_right AND upload_MED >= bucket_left) / COUNT(*) AS ul_frac
-  FROM ul_stats_perip_perday CROSS JOIN buckets
+    COUNTIF(stats.upload_MED < bucket_right AND stats.upload_MED >= bucket_left) AS ul_samples_bucket,
+    ROUND(COUNTIF(stats.upload_MED < bucket_right AND stats.upload_MED >= bucket_left) / COUNT(*),3) AS ul_frac_bucket
+  FROM ul_random_perip_perday CROSS JOIN buckets
   GROUP BY
     date,
     continent_code,
@@ -184,5 +184,4 @@ SELECT *, MOD(ABS(FARM_FINGERPRINT(continent_code)), 1000) as shard FROM dl_hist
 JOIN ul_histogram USING (date, continent_code, bucket_min, bucket_max)
 JOIN dl_stats_per_day USING (date, continent_code)
 JOIN ul_stats_per_day USING (date, continent_code)
-JOIN dl_samples_total USING (date, continent_code)
-JOIN ul_samples_total USING (date, continent_code)
+ORDER BY date, continent_code, bucket_min
