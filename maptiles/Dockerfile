@@ -22,6 +22,7 @@ FROM google/cloud-sdk:alpine
 
 # Copy the only binary we need from the tippecanoe container.
 COPY --from=build-tippecanoe /usr/local/bin/tippecanoe /usr/local/bin/tippecanoe
+COPY --from=build-tippecanoe /usr/local/bin/tile-join /usr/local/bin/tile-join
 
 # Make sure we have make, nodejs/npm and tippecanoe's dependencies.
 RUN apk add --no-cache libstdc++ sqlite-libs make nodejs npm ca-certificates
