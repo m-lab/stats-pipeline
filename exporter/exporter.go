@@ -39,21 +39,21 @@ const (
 
 var (
 	fieldRegex           = regexp.MustCompile(`{{\s*\.([A-Za-z0-9_]+)\s*}}`)
-	bytesProcessedMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	bytesProcessedMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "stats_pipeline_exporter_bytes_processed_total",
 		Help: "Bytes processed by the exporter",
 	}, []string{
 		"table",
 	})
 
-	cacheHitMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	cacheHitMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "stats_pipeline_exporter_cache_hits_total",
 		Help: "Number of cache hits",
 	}, []string{
 		"table",
 	})
 
-	uploadedBytesMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+	uploadedBytesMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "stats_pipeline_exporter_uploaded_bytes_total",
 		Help: "Bytes uploaded to GCS",
 	}, []string{
@@ -197,9 +197,12 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	exporter.uploadQLen = 0
 	exporter.queriesDone = 0
 
-	// Reset query number metric.
+	// Reset metrics for this table to zero.
+	resetMetrics(sourceTable)
+
+	// The number of queries to run is the same as the number of clauses
+	// generated earlier.
 	queryTotalMetric.WithLabelValues(sourceTable).Set(float64(len(clauses)))
-	queryProcessedMetric.WithLabelValues(sourceTable).Set(0)
 
 	// Start a goroutine to print statistics periodically.
 	printStatsCtx, cancelPrintStats := context.WithCancel(ctx)
@@ -505,4 +508,14 @@ func removeFieldsFromRow(row bqRow, fields []string) bqRow {
 		}
 	}
 	return newRow
+}
+
+// resetMetrics sets all the metrics for a given table to zero.
+func resetMetrics(table string) {
+	queryProcessedMetric.WithLabelValues(table).Set(0)
+	inFlightUploadsMetric.WithLabelValues(table).Set(0)
+	uploadQueueMetric.WithLabelValues(table).Set(0)
+	uploadedBytesMetric.WithLabelValues(table).Set(0)
+	bytesProcessedMetric.WithLabelValues(table).Set(0)
+	cacheHitMetric.WithLabelValues(table).Set(0)
 }
