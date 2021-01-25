@@ -61,7 +61,7 @@ var (
 	})
 
 	queryTotalMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "stats_pipeline_exporter_query_total",
+		Name: "stats_pipeline_exporter_queries_total",
 		Help: "Export queries to be processed for the current table",
 	}, []string{
 		"table",
@@ -82,7 +82,7 @@ var (
 	})
 
 	inFlightUploadsMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "stats_pipeline_exporter_uploads_current",
+		Name: "stats_pipeline_exporter_uploads_inflight",
 		Help: "Number of in-flight uploads",
 	}, []string{
 		"table",
@@ -198,8 +198,8 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	exporter.queriesDone = 0
 
 	// Reset query number metric.
-	queryTotalMetric.WithLabelValues(config.Table).Set(float64(len(clauses)))
-	queryProcessedMetric.WithLabelValues(config.Table).Set(0)
+	queryTotalMetric.WithLabelValues(sourceTable).Set(float64(len(clauses)))
+	queryProcessedMetric.WithLabelValues(sourceTable).Set(0)
 
 	// Start a goroutine to print statistics periodically.
 	printStatsCtx, cancelPrintStats := context.WithCancel(ctx)
