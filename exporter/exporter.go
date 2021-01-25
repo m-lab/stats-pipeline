@@ -39,23 +39,51 @@ const (
 
 var (
 	fieldRegex           = regexp.MustCompile(`{{\s*\.([A-Za-z0-9_]+)\s*}}`)
-	bytesProcessedMetric = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "stats_pipeline_exporter_bytes_processed_total",
+	bytesProcessedMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "stats_pipeline_exporter_bytes_processed",
 		Help: "Bytes processed by the exporter",
 	}, []string{
 		"table",
 	})
 
-	cacheHitMetric = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "stats_pipeline_exporter_cache_hit_total",
+	cacheHitMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "stats_pipeline_exporter_cache_hits",
 		Help: "Number of cache hits",
 	}, []string{
 		"table",
 	})
 
-	uploadedBytesMetric = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "stats_pipeline_exporter_uploaded_bytes_total",
+	uploadedBytesMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "stats_pipeline_exporter_uploaded_bytes",
 		Help: "Bytes uploaded to GCS",
+	}, []string{
+		"table",
+	})
+
+	queryTotalMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "stats_pipeline_exporter_queries",
+		Help: "Export queries to be processed for the current table",
+	}, []string{
+		"table",
+	})
+
+	queryProcessedMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "stats_pipeline_exporter_queries_processed",
+		Help: "Queries processed for the current table",
+	}, []string{
+		"table",
+	})
+
+	uploadQueueMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "stats_pipeline_exporter_uploads_queued",
+		Help: "Number of objects in the upload queue",
+	}, []string{
+		"table",
+	})
+
+	inFlightUploadsMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "stats_pipeline_exporter_uploads_inflight",
+		Help: "Number of in-flight uploads",
 	}, []string{
 		"table",
 	})
@@ -169,6 +197,13 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	exporter.uploadQLen = 0
 	exporter.queriesDone = 0
 
+	// Reset metrics for this table to zero.
+	resetMetrics(sourceTable)
+
+	// The number of queries to run is the same as the number of clauses
+	// generated earlier.
+	queryTotalMetric.WithLabelValues(config.Table).Set(float64(len(clauses)))
+
 	// Start a goroutine to print statistics periodically.
 	printStatsCtx, cancelPrintStats := context.WithCancel(ctx)
 	go exporter.printStats(printStatsCtx, len(clauses))
@@ -213,7 +248,10 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 				fields:     fields,
 				outputPath: outputPath,
 			}
+			// Atomically increase the queriesDone counter and update metric.
 			atomic.AddInt32(&exporter.queriesDone, 1)
+			queryProcessedMetric.WithLabelValues(config.Table).Inc()
+
 		}
 	}
 	// The goroutines' termination is controlled by closing the channels they
@@ -334,6 +372,7 @@ func (exporter *JSONExporter) uploadFile(j *QueryJob, rows []bqRow, lastRow bqRo
 		return err
 	}
 	atomic.AddInt32(&exporter.uploadQLen, 1)
+	uploadQueueMetric.WithLabelValues(j.name).Inc()
 	marshalAndUpload(j.name, buf.String(), rows, exporter.uploadJobs)
 	return nil
 }
@@ -349,7 +388,10 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context,
 		// The uploadQueue counter is decremented before starting to upload
 		// the file, so that in-flight uploads aren't counted.
 		atomic.AddInt32(&exporter.uploadQLen, -1)
+		uploadQueueMetric.WithLabelValues(j.table).Dec()
+		inFlightUploadsMetric.WithLabelValues(j.table).Inc()
 		_, err := up.Upload(ctx, j.objName, j.content)
+		inFlightUploadsMetric.WithLabelValues(j.table).Dec()
 		uploadedBytesMetric.WithLabelValues(j.table).Add(float64(len(j.content)))
 		exporter.results <- UploadResult{
 			objName: j.objName,
@@ -466,4 +508,14 @@ func removeFieldsFromRow(row bqRow, fields []string) bqRow {
 		}
 	}
 	return newRow
+}
+
+// resetMetrics sets all the metrics for a given table to zero.
+func resetMetrics(table string) {
+	queryProcessedMetric.WithLabelValues(table).Set(0)
+	inFlightUploadsMetric.WithLabelValues(table).Set(0)
+	uploadQueueMetric.WithLabelValues(table).Set(0)
+	uploadedBytesMetric.WithLabelValues(table).Set(0)
+	bytesProcessedMetric.WithLabelValues(table).Set(0)
+	cacheHitMetric.WithLabelValues(table).Set(0)
 }
