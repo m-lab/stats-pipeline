@@ -47,7 +47,7 @@ var (
 	})
 
 	cacheHitMetric = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "stats_pipeline_exporter_cache_hit_total",
+		Name: "stats_pipeline_exporter_cache_hits_total",
 		Help: "Number of cache hits",
 	}, []string{
 		"table",
@@ -68,14 +68,14 @@ var (
 	})
 
 	queryProcessedMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "stats_pipeline_exporter_query_processed",
+		Name: "stats_pipeline_exporter_queries_processed",
 		Help: "Queries processed for the current table",
 	}, []string{
 		"table",
 	})
 
 	uploadQueueMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "stats_pipeline_exporter_upload_queue",
+		Name: "stats_pipeline_exporter_uploads_queued",
 		Help: "Number of objects in the upload queue",
 	}, []string{
 		"table",
