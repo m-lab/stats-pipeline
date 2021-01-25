@@ -40,28 +40,28 @@ const (
 var (
 	fieldRegex           = regexp.MustCompile(`{{\s*\.([A-Za-z0-9_]+)\s*}}`)
 	bytesProcessedMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "stats_pipeline_exporter_bytes_processed_total",
+		Name: "stats_pipeline_exporter_bytes_processed",
 		Help: "Bytes processed by the exporter",
 	}, []string{
 		"table",
 	})
 
 	cacheHitMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "stats_pipeline_exporter_cache_hits_total",
+		Name: "stats_pipeline_exporter_cache_hits",
 		Help: "Number of cache hits",
 	}, []string{
 		"table",
 	})
 
 	uploadedBytesMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "stats_pipeline_exporter_uploaded_bytes_total",
+		Name: "stats_pipeline_exporter_uploaded_bytes",
 		Help: "Bytes uploaded to GCS",
 	}, []string{
 		"table",
 	})
 
 	queryTotalMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "stats_pipeline_exporter_queries_total",
+		Name: "stats_pipeline_exporter_queries",
 		Help: "Export queries to be processed for the current table",
 	}, []string{
 		"table",
@@ -202,7 +202,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 
 	// The number of queries to run is the same as the number of clauses
 	// generated earlier.
-	queryTotalMetric.WithLabelValues(sourceTable).Set(float64(len(clauses)))
+	queryTotalMetric.WithLabelValues(config.Table).Set(float64(len(clauses)))
 
 	// Start a goroutine to print statistics periodically.
 	printStatsCtx, cancelPrintStats := context.WithCancel(ctx)
