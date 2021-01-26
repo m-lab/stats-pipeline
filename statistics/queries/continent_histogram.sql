@@ -1,7 +1,7 @@
 WITH
 # Generate equal sized buckets in log-space between near 0 Mbps and ~1 Gbps+
 buckets AS (
-  SELECT POW(10, x-.5) AS bucket_left, POW(10,x) AS bucket_right
+  SELECT POW(10, x-.25) AS bucket_left, POW(10,x+.25) AS bucket_right
   FROM UNNEST(GENERATE_ARRAY(0, 3.5, .5)) AS x
 ),
 # Select the initial set of results
@@ -14,8 +14,7 @@ dl_per_location AS (
     a.MeanThroughputMbps AS mbps,
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_downloads`
-  WHERE date BETWEEN #@startdate AND @enddate
-                      "2020-01-01" AND "2020-12-31"
+  WHERE date BETWEEN @startdate AND @enddate
   AND a.MeanThroughputMbps != 0
 ),
 # With good locations and valid IPs
@@ -56,9 +55,9 @@ dl_random_perip_perday AS (
     continent_code,
     ip,
     ARRAY_LENGTH(members) AS tests,
-    # Substitute any large, preferably prime number for 1234567 to get different sample
-    members[SAFE_OFFSET(MOD(1234567,ARRAY_LENGTH(members)))] AS random1,
-    members[SAFE_OFFSET(MOD(12345679,ARRAY_LENGTH(members)))] AS random2,
+    # Use a prime number larger than the number of total rows in an aggregation to select a random row 
+    members[SAFE_OFFSET(MOD(511232941,ARRAY_LENGTH(members)))] AS random1,
+    members[SAFE_OFFSET(MOD(906686609,ARRAY_LENGTH(members)))] AS random2,
     stats
   FROM dl_rows_perip_perday
 ),
@@ -103,8 +102,7 @@ ul_per_location AS (
     a.MeanThroughputMbps AS mbps,
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_uploads`
-  WHERE date BETWEEN #@startdate AND @enddate
-                      "2020-01-01" AND "2020-12-31"
+  WHERE date BETWEEN @startdate AND @enddate
   AND a.MeanThroughputMbps != 0
 ),
 # With good locations and valid IPs
@@ -143,17 +141,16 @@ ul_random_perip_perday AS (
     continent_code,
     ip,
     ARRAY_LENGTH(members) AS tests,
-    # Substitute any large, preferably prime number for 1234567 to get different sample
-    members[SAFE_OFFSET(MOD(1234567,ARRAY_LENGTH(members)))] AS random1,
-    members[SAFE_OFFSET(MOD(12345679,ARRAY_LENGTH(members)))] AS random2,
+    # Use a prime number larger than the number of total rows in an aggregation to select a random row 
+    members[SAFE_OFFSET(MOD(511232941,ARRAY_LENGTH(members)))] AS random1,
+    members[SAFE_OFFSET(MOD(906686609,ARRAY_LENGTH(members)))] AS random2,
     stats
   FROM ul_rows_perip_perday
 ),
-
 # Calculate log average per day from random samples
 ul_stats_per_day AS (
   SELECT
-    continent_code, date,
+    continent_code, date, 
     ROUND(POW(10,AVG(Safe.LOG10(stats.upload_MED))),3) AS ul_day_log_avg_median,
     ROUND(POW(10,AVG(Safe.LOG10(random1.MinRtt))),3) AS ul_min_rtt_day_log_avg,
     ROUND(POW(10,AVG(Safe.LOG10(random1.mbps))),3) AS ul_day_log_avg_random1,
