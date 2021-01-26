@@ -1,9 +1,7 @@
-GCS_BUCKET=maptiles-${PROJECT}
-
-# Check that the PROJECT variable is set.
+# Check that the GCS_BUCKET variable is set.
 check-env:
-ifndef PROJECT
-	$(error Please set the PROJECT environment variable.)
+ifndef GCS_BUCKET
+	$(error Please set the GCS_BUCKET environment variable.)
 endif
 
 # download the block level shapefiles from the census

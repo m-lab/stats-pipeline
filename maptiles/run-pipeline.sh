@@ -15,4 +15,5 @@ if ! curl -X POST "http://stats-pipeline-service:8080/v0/pipeline?year=${year}";
 fi
 
 echo "Stats-pipeline completed successfully, generating maptiles..."
+export GCS_BUCKET=maptiles-${PROJECT}
 make piecewise
