@@ -17,8 +17,8 @@ RUN git clone https://github.com/mapbox/tippecanoe.git tippecanoe \
  && make -j$(nproc) \
  && make install
 
-# The actual container is based on the official node base image.
-FROM google/cloud-sdk:alpine
+# The actual container is based on the officiale cloud-sdk:alpine image.
+FROM gcr.io/google.com/cloudsdktool/cloud-sdk:324.0.0-alpine
 
 # Copy the only binary we need from the tippecanoe container.
 COPY --from=build-tippecanoe /usr/local/bin/tippecanoe /usr/local/bin/tippecanoe
