@@ -1,3 +1,8 @@
+# Check that the GCS_BUCKET variable is set.
+check-env:
+ifndef GCS_BUCKET
+	$(error Please set the GCS_BUCKET environment variable.)
+endif
 
 # download the block level shapefiles from the census
 # they serve them as a single zip per state so we have
@@ -28,20 +33,33 @@ geographies/tracts: geographies/blocks/.downloaded
 geographies/tracts-geo.json: geographies/tracts
 	mapshaper -i geographies/tracts/*.json merge-files -each 'fips = STATEFP10 + "" + COUNTYFP10 + TRACTCE10' -o geographies/tracts-geo.json format=geojson
 
-fcc/477-without-satellite-june-2019.csv:
-	mkdir -p fcc
-	wget -c --output-document=fcc/477-without-satellite-june-2019.csv https://opendata.fcc.gov/api/views/sgz3-kiqt/rows.csv?accessType=DOWNLOAD&sorting=true
+geographies/states-geo.json: check-env
+	mkdir -p geographies
+	gsutil -m cp gs://${GCS_BUCKET}/geographies/states-geo.json geographies/
 
-# this is just to make this file smaller and easier to deal
-# with. the source file is some 29M rows
-fcc/test.csv: fcc/477-without-satellite-june-2019.csv
-	head -n 5000 fcc/477-without-satellite-june-2019.csv > fcc/test.csv
+geographies/counties-geo.json: check-env
+	mkdir -p geographies
+	gsutil -m cp gs://${GCS_BUCKET}/geographies/counties-geo.json geographies/
 
-# load fcc 477 into sqlite so that we can easily
-# query it by different geography types
-fcc-477.sqlite: fcc/477-without-satellite-june-2019.csv
-	rm -f fcc-477.sqlite
-	node scripts/load-fcc-477-to-db.js fcc/477-without-satellite-june-2019.csv
+census/county-demographics-acs-5.csv: check-env
+	mkdir -p census
+	gsutil -m cp gs://${GCS_BUCKET}/census/county-demographics-acs-5.csv census/
+
+census/county-internet-acs-5.csv: check-env
+	mkdir -p census
+	gsutil -m cp gs://${GCS_BUCKET}/census/county-internet-acs-5.csv census/
+
+census/tract-demographics-acs-5.csv: check-env
+	mkdir -p census
+	gsutil -m cp gs://${GCS_BUCKET}/census/tract-demographics-acs-5.csv census/
+
+census/tract-internet-acs-5.csv: check-env
+	mkdir -p census
+	gsutil -m cp gs://${GCS_BUCKET}/census/tract-internet-acs-5.csv census/
+
+# dowload fcc 477 sqlite database from GCS
+fcc-477.sqlite: check-env
+	gsutil -m cp gs://${GCS_BUCKET}/fcc/201906/fcc-477.sqlite fcc-477.sqlite
 
 # summarize 477 data by block
 fcc-block.json: fcc-477.sqlite
@@ -147,12 +165,12 @@ tracts-geo-with-fcc-mlab.json: tracts-geo-with-fcc.json mlab-tracts.json
 counties.mbtiles: counties-geo-with-census-fcc-mlab.json
 	tippecanoe -z12 -f -o counties.mbtiles -l counties counties-geo-with-census-fcc-mlab.json
 
-states.mbtiles:
+states.mbtiles: geographies/states-geo.json
 	tippecanoe -z12 -f -o states.mbtiles -l states geographies/states-geo.json
 
 tracts.mbtiles: tracts-geo-with-fcc-mlab.json
 	tippecanoe -z12 -f -o tracts.mbtiles -l tracts --no-tile-size-limit -x STATEFP10 -x COUNTYFP10 -x TRACTCE10 tracts-geo-with-fcc-mlab.json
 
-piecewise: counties.mbtiles states.mbtiles tracts.mbtiles
+piecewise: check-env counties.mbtiles states.mbtiles tracts.mbtiles
 	tile-join -pk -pC -z10 -f -e piecewise counties.mbtiles states.mbtiles tracts.mbtiles
-	gsutil -m cp -r piecewise gs://maptiles-mlab-sandbox
+	gsutil -m cp -r piecewise gs://${GCS_BUCKET}
