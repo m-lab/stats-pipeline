@@ -1,4 +1,11 @@
-GCS_BUCKET=maptiles-mlab-sandbox
+GCS_BUCKET=maptiles-${PROJECT}
+
+# Check that the PROJECT variable is set.
+check-env:
+ifndef PROJECT
+	$(error Please set the PROJECT environment variable.)
+endif
+
 # download the block level shapefiles from the census
 # they serve them as a single zip per state so we have
 # to download them, unzip them, & convert them to geojson
@@ -28,32 +35,32 @@ geographies/tracts: geographies/blocks/.downloaded
 geographies/tracts-geo.json: geographies/tracts
 	mapshaper -i geographies/tracts/*.json merge-files -each 'fips = STATEFP10 + "" + COUNTYFP10 + TRACTCE10' -o geographies/tracts-geo.json format=geojson
 
-geographies/states-geo.json:
+geographies/states-geo.json: check-env
 	mkdir -p geographies
 	gsutil -m cp gs://${GCS_BUCKET}/geographies/states-geo.json geographies/
 
-geographies/counties-geo.json:
+geographies/counties-geo.json: check-env
 	mkdir -p geographies
 	gsutil -m cp gs://${GCS_BUCKET}/geographies/counties-geo.json geographies/
 
-census/county-demographics-acs-5.csv:
+census/county-demographics-acs-5.csv: check-env
 	mkdir -p census
 	gsutil -m cp gs://${GCS_BUCKET}/census/county-demographics-acs-5.csv census/
 
-census/county-internet-acs-5.csv:
+census/county-internet-acs-5.csv: check-env
 	mkdir -p census
 	gsutil -m cp gs://${GCS_BUCKET}/census/county-internet-acs-5.csv census/
 
-census/tract-demographics-acs-5.csv:
+census/tract-demographics-acs-5.csv: check-env
 	mkdir -p census
 	gsutil -m cp gs://${GCS_BUCKET}/census/tract-demographics-acs-5.csv census/
 
-census/tract-internet-acs-5.csv:
+census/tract-internet-acs-5.csv: check-env
 	mkdir -p census
 	gsutil -m cp gs://${GCS_BUCKET}/census/tract-internet-acs-5.csv census/
 
 # dowload fcc 477 sqlite database from GCS
-fcc-477.sqlite:
+fcc-477.sqlite: check-env
 	gsutil -m cp gs://${GCS_BUCKET}/fcc/201906/fcc-477.sqlite fcc-477.sqlite
 
 # summarize 477 data by block
@@ -166,6 +173,6 @@ states.mbtiles: geographies/states-geo.json
 tracts.mbtiles: tracts-geo-with-fcc-mlab.json
 	tippecanoe -z12 -f -o tracts.mbtiles -l tracts --no-tile-size-limit -x STATEFP10 -x COUNTYFP10 -x TRACTCE10 tracts-geo-with-fcc-mlab.json
 
-piecewise: counties.mbtiles states.mbtiles tracts.mbtiles
+piecewise: check-env counties.mbtiles states.mbtiles tracts.mbtiles
 	tile-join -pk -pC -z10 -f -e piecewise counties.mbtiles states.mbtiles tracts.mbtiles
 	gsutil -m cp -r piecewise gs://${GCS_BUCKET}
