@@ -86,7 +86,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "stats_pipeline_exporter_uploads_queue_size",
 			Help:    "Upload queue size histogram",
-			Buckets: []float64{1, 2, 4},
+			Buckets: []float64{0, 1, 2, 4},
 		},
 		[]string{"table"},
 	)
