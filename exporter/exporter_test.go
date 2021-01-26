@@ -14,6 +14,7 @@ import (
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
 	"github.com/m-lab/go/cloudtest/bqfake"
 	"github.com/m-lab/go/cloudtest/gcsfake"
+	"github.com/m-lab/go/prometheusx/promtest"
 	"github.com/m-lab/go/testingx"
 	"google.golang.org/api/iterator"
 )
@@ -383,4 +384,17 @@ func Test_removeFieldsFromRow(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestPrometheusMetrics ensures that all the metrics pass the linter.
+func TestPrometheusMetrics(t *testing.T) {
+	bytesProcessedMetric.WithLabelValues("x")
+	cacheHitMetric.WithLabelValues("x")
+	uploadedBytesMetric.WithLabelValues("x")
+	queryTotalMetric.WithLabelValues("x")
+	queryProcessedMetric.WithLabelValues("x")
+	uploadQueueMetric.WithLabelValues("x")
+	inFlightUploadsMetric.WithLabelValues("x")
+
+	promtest.LintMetrics(t)
 }
