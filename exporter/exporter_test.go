@@ -393,8 +393,8 @@ func TestPrometheusMetrics(t *testing.T) {
 	uploadedBytesMetric.WithLabelValues("x")
 	queryTotalMetric.WithLabelValues("x")
 	queryProcessedMetric.WithLabelValues("x")
-	uploadQueueMetric.WithLabelValues("x")
 	inFlightUploadsMetric.WithLabelValues("x")
+	uploadQueueSizeHistogram.WithLabelValues("x")
 
 	promtest.LintMetrics(t)
 }
