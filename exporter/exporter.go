@@ -74,19 +74,22 @@ var (
 		"table",
 	})
 
-	uploadQueueMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "stats_pipeline_exporter_uploads_queued",
-		Help: "Number of objects in the upload queue",
-	}, []string{
-		"table",
-	})
-
 	inFlightUploadsMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "stats_pipeline_exporter_uploads_inflight",
 		Help: "Number of in-flight uploads",
 	}, []string{
 		"table",
 	})
+
+	// Histogram bucket to record the upload queue size.
+	uploadQueueSizeHistogram = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "stats_pipeline_exporter_uploads_queue_size",
+			Help:    "Upload queue size histogram",
+			Buckets: []float64{0, 1, 2, 4},
+		},
+		[]string{"table"},
+	)
 )
 
 // Convenience type for a bigquery row.
@@ -372,7 +375,6 @@ func (exporter *JSONExporter) uploadFile(j *QueryJob, rows []bqRow, lastRow bqRo
 		return err
 	}
 	atomic.AddInt32(&exporter.uploadQLen, 1)
-	uploadQueueMetric.WithLabelValues(j.name).Inc()
 	marshalAndUpload(j.name, buf.String(), rows, exporter.uploadJobs)
 	return nil
 }
@@ -387,11 +389,16 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context,
 	for j := range exporter.uploadJobs {
 		// The uploadQueue counter is decremented before starting to upload
 		// the file, so that in-flight uploads aren't counted.
+		// After this, we observe the size of the upload queue and put its
+		// length in a Prometheus metric.
 		atomic.AddInt32(&exporter.uploadQLen, -1)
-		uploadQueueMetric.WithLabelValues(j.table).Dec()
+		uploadQueueSizeHistogram.WithLabelValues(j.table).Observe(float64(
+			atomic.LoadInt32(&exporter.uploadQLen)))
+
 		inFlightUploadsMetric.WithLabelValues(j.table).Inc()
 		_, err := up.Upload(ctx, j.objName, j.content)
 		inFlightUploadsMetric.WithLabelValues(j.table).Dec()
+
 		uploadedBytesMetric.WithLabelValues(j.table).Add(float64(len(j.content)))
 		exporter.results <- UploadResult{
 			objName: j.objName,
@@ -514,7 +521,6 @@ func removeFieldsFromRow(row bqRow, fields []string) bqRow {
 func resetMetrics(table string) {
 	queryProcessedMetric.WithLabelValues(table).Set(0)
 	inFlightUploadsMetric.WithLabelValues(table).Set(0)
-	uploadQueueMetric.WithLabelValues(table).Set(0)
 	uploadedBytesMetric.WithLabelValues(table).Set(0)
 	bytesProcessedMetric.WithLabelValues(table).Set(0)
 	cacheHitMetric.WithLabelValues(table).Set(0)
