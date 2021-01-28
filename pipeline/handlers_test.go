@@ -74,6 +74,11 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline", nil),
 			statusCode: http.StatusBadRequest,
 		},
+		{
+			name:       "action-histogram",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?year=2020&step=histogram", bytes.NewReader([]byte{})),
+			statusCode: http.StatusOK,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -59,6 +59,10 @@ func NewHandler(bqClient bqiface.Client, exporter Exporter,
 // The querystring parameters are:
 // - year (mandatory): the year to generate statistics for.
 //
+// Optional parameters:
+// - step: specify which step of the pipeline to run (histograms or exports).
+//   if unspecified, all the steps will be run.
+//
 // This endpoint accepts only POST requests.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer log.Print("handler exited")
@@ -83,38 +87,45 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("The pipeline is running already."))
 		return
 	}
-	// Update all the histogram tables.
-	for name, config := range h.config {
-		if r.Context().Err() != nil {
-			// If the request's context has been canceled, we must return here.
-			return
-		}
-		log.Printf("Updating histogram table: %s...", name)
-		err := h.generateHistogramForYear(r.Context(), config, year)
-		if err != nil {
-			// If one of the histogram queries fail, we still want to try the
-			// remaining ones.
-			log.Printf("Cannot update histogram %s: %v", name, err)
-			continue
+
+	step := r.URL.Query().Get("step")
+	if step == "" || step == "histograms" {
+		// Update all the histogram tables.
+		for name, config := range h.config {
+			if r.Context().Err() != nil {
+				// If the request's context has been canceled, we must return here.
+				return
+			}
+			log.Printf("Updating histogram table: %s...", name)
+			err := h.generateHistogramForYear(r.Context(), config, year)
+			if err != nil {
+				// If one of the histogram queries fail, we still want to try the
+				// remaining ones.
+				log.Printf("Cannot update histogram %s: %v", name, err)
+				continue
+			}
 		}
 	}
-	// Export data to GCS.
-	for name, config := range h.config {
-		if r.Context().Err() != nil {
-			// If the request's context has been canceled, we must return here.
-			return
+
+	if step == "" || step == "exports" {
+		// Export data to GCS.
+		for name, config := range h.config {
+			if r.Context().Err() != nil {
+				// If the request's context has been canceled, we must return here.
+				return
+			}
+			log.Printf("Exporting %s...", name)
+			// Read query file
+			content, err := ioutil.ReadFile(config.ExportQueryFile)
+			if err != nil {
+				log.Printf("Cannot read query file %s, skipping (%v)",
+					config.ExportQueryFile, err)
+				continue
+			}
+			selectTpl := template.Must(template.New(name).
+				Option("missingkey=zero").Parse(string(content)))
+			h.exporter.Export(r.Context(), config, selectTpl, year)
 		}
-		log.Printf("Exporting %s...", name)
-		// Read query file
-		content, err := ioutil.ReadFile(config.ExportQueryFile)
-		if err != nil {
-			log.Printf("Cannot read query file %s, skipping (%v)",
-				config.ExportQueryFile, err)
-			continue
-		}
-		selectTpl := template.Must(template.New(name).
-			Option("missingkey=zero").Parse(string(content)))
-		h.exporter.Export(r.Context(), config, selectTpl, year)
 	}
 }
 
