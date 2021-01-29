@@ -1,10 +1,12 @@
-#standardSQL
 WITH
-# Generate equal sized buckets in log-space between near 0 Mbps and ~1 Gbps+
+--Generate equal sized buckets in log-space between near 0 Mbps and ~1 Gbps+
 buckets AS (
-  SELECT POW(10, x-.5) AS bucket_left, POW(10,x) AS bucket_right
+  SELECT POW(10, x-.25) AS bucket_left, POW(10,x+.25) AS bucket_right
   FROM UNNEST(GENERATE_ARRAY(0, 3.5, .5)) AS x
 ),
+--US Counties are identified for test results using a GIS approach. The lat/lon
+-- annotated on each test row is looked up in the polygons of counties provided
+-- by Google Public Datasets 
 counties AS (
   SELECT
     county_name,
@@ -13,6 +15,8 @@ counties AS (
   FROM
     `bigquery-public-data.geo_us_boundaries.counties`
 ),
+--Here we use a copy of the name and geoid of counties, used to select county
+-- name in the final results but not the WKT geography
 counties_noWKT AS (
   SELECT
     county_name,
@@ -20,200 +24,242 @@ counties_noWKT AS (
   FROM
     `bigquery-public-data.geo_us_boundaries.counties`
 ),
-dl AS (
+--Select the initial set of tests
+dl_per_location AS (
   SELECT
     date,
-    counties.GEOID AS GEOID,
-    CONCAT(client.Geo.CountryCode,"-",client.Geo.region) AS state,
+    client.Geo.ContinentCode AS continent_code,
+    client.Geo.CountryCode AS country_code,
+    CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode) AS state,
     client.Network.ASNumber AS asn,
-    NET.SAFE_IP_FROM_STRING(client.IP) AS ip,
+    counties.GEOID AS GEOID,
+    NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
+    id,
     a.MeanThroughputMbps AS mbps,
     a.MinRTT AS MinRTT
-  FROM
-    `measurement-lab.ndt.unified_downloads` tests, counties
-  WHERE
-    date BETWEEN @startdate AND @enddate
-    AND client.Geo.CountryCode = "US"
-    AND client.Geo.Region IS NOT NULL
-    AND client.Geo.Region != ""
-    AND client.Network.ASNumber IS NOT NULL
-    AND ST_WITHIN(
-      ST_GeogPoint(
-        client.Geo.Longitude,
-        client.Geo.Latitude
-      ), counties.WKT
-    )
+  FROM `measurement-lab.ndt.unified_downloads`, counties
+  WHERE date BETWEEN @startdate AND @enddate
+  AND client.Geo.CountryCode = "US"
+  AND client.Geo.Subdivision1ISOCode IS NOT NULL
+  AND client.Geo.Subdivision1ISOCode != ""
+  AND client.Network.ASNumber IS NOT NULL
+  AND ST_WITHIN(
+    ST_GeogPoint(
+      client.Geo.Longitude,
+      client.Geo.Latitude
+    ), counties.WKT
+  )  
+  AND a.MeanThroughputMbps != 0
 ),
-dl_stats_perip_perday AS (
+--Filter for only tests With good locations and valid IPs
+dl_per_location_cleaned AS (
+  SELECT * FROM dl_per_location
+  WHERE
+    continent_code IS NOT NULL AND continent_code != ""
+    AND country_code IS NOT NULL AND country_code != ""
+    AND state IS NOT NULL AND state != ""
+    AND GEOID IS NOT NULL AND GEOID != ""
+    AND ip IS NOT NULL
+),
+--Fingerprint all cleaned tests, in an arbitrary but repeatable order
+dl_fingerprinted AS (
   SELECT
     date,
+    continent_code,
+    country_code,
     state,
     GEOID,
     asn,
     ip,
-    MIN(mbps) AS download_MIN,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)] AS download_Q25,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(50)] AS download_MED,
-    AVG(mbps) AS download_AVG,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)] AS download_Q75,
-    MAX(mbps) AS download_MAX,
-    APPROX_QUANTILES(MinRTT, 100) [SAFE_ORDINAL(50)] AS download_minRTT_MED
-  FROM dl
-  GROUP BY date, state, GEOID, asn, ip
+    ARRAY_AGG(STRUCT(ABS(FARM_FINGERPRINT(id)) AS ffid, mbps, MinRTT) ORDER BY ABS(FARM_FINGERPRINT(id))) AS members
+  FROM dl_per_location_cleaned
+  GROUP BY date, continent_code, country_code, state, GEOID, asn, ip
 ),
-dl_stats_perday AS (
+--Select two random rows for each IP using a prime number larger than the 
+--  total number of tests. random1 is used for per day/geo statistics in 
+--  `dl_stats_per_day` and log averages using both random1 and random2
+dl_random_ip_rows_perday AS (
   SELECT
     date,
+    continent_code,
+    country_code,
     state,
     GEOID,
     asn,
-    MIN(download_MIN) AS download_MIN,
-    APPROX_QUANTILES(download_Q25, 100) [SAFE_ORDINAL(25)] AS download_Q25,
-    APPROX_QUANTILES(download_MED, 100) [SAFE_ORDINAL(50)] AS download_MED,
-    AVG(download_AVG) AS download_AVG,
-    APPROX_QUANTILES(download_Q75, 100) [SAFE_ORDINAL(75)] AS download_Q75,
-    MAX(download_MAX) AS download_MAX,
-    APPROX_QUANTILES(download_minRTT_MED, 100) [SAFE_ORDINAL(50)] AS download_minRTT_MED
-  FROM dl_stats_perip_perday
-  GROUP BY date, state, GEOID, asn
+    ip,
+    ARRAY_LENGTH(members) AS tests,
+    members[SAFE_OFFSET(MOD(511232941,ARRAY_LENGTH(members)))] AS random1,
+    members[SAFE_OFFSET(MOD(906686609,ARRAY_LENGTH(members)))] AS random2
+  FROM dl_fingerprinted
 ),
-# Count the difference in the number of tests from the same IPs on the same
-#   day, to the number of tests used in the daily statistics.
-dl_samples_total AS (
+--Calculate log averages and statistics per day from random samples
+dl_stats_per_day AS (
   SELECT
-    date,
-    COUNT(*) AS dl_total_samples,
-    state,
-    GEOID,
-    asn
-  FROM dl
-  GROUP BY
-    date,
-    state,
-    GEOID,
-    asn
+    date, continent_code, country_code, state, GEOID, asn,
+    COUNT(*) AS dl_samples_day,
+    ROUND(POW(10,AVG(Safe.LOG10(random1.mbps))),3) AS dl_LOG_AVG_rnd1,
+    ROUND(POW(10,AVG(Safe.LOG10(random2.mbps))),3) AS dl_LOG_AVG_rnd2,
+    ROUND(POW(10,AVG(Safe.LOG10(random1.MinRtt))),3) AS dl_minRTT_LOG_AVG_rnd1,
+    ROUND(POW(10,AVG(Safe.LOG10(random2.MinRtt))),3) AS dl_minRTT_LOG_AVG_rnd2,
+    ROUND(MIN(random1.mbps),3) AS download_MIN,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(25)],3) AS download_Q25,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(50)],3) AS download_MED,
+    ROUND(AVG(random1.mbps),3) AS download_AVG,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(75)],3) AS download_Q75,
+    ROUND(MAX(random1.mbps),3) AS download_MAX,
+    ROUND(APPROX_QUANTILES(random1.MinRTT, 100) [SAFE_ORDINAL(50)],3) AS download_minRTT_MED,
+  FROM dl_random_ip_rows_perday
+  GROUP BY date, continent_code, country_code, state, GEOID, asn
 ),
-# Count the samples that fall into each bucket and get frequencies
+--Count the samples that fall into each bucket and get frequencies
 dl_histogram AS (
   SELECT
     date,
+    continent_code,
+    country_code,
     state,
     GEOID,
     asn,
-    CASE WHEN bucket_left = 0.31622776601683794 THEN 0
+    --Set the lowest bucket's min to zero, so all tests below the generated min of the lowest bin are included. 
+    CASE WHEN bucket_left = 0.5623413251903491 THEN 0
     ELSE bucket_left END AS bucket_min,
     bucket_right AS bucket_max,
-    COUNTIF(download_MED < bucket_right AND download_MED >= bucket_left) AS dl_samples_bucket,
-    COUNT(*) AS dl_samples_day,
-    COUNTIF(download_MED < bucket_right AND download_MED >= bucket_left) / COUNT(*) AS dl_frac
-  FROM dl_stats_perip_perday CROSS JOIN buckets
+    COUNTIF(random1.mbps < bucket_right AND random1.mbps >= bucket_left) AS dl_samples_bucket,
+    ROUND(COUNTIF(random1.mbps < bucket_right AND random1.mbps >= bucket_left) / COUNT(*), 3) AS dl_frac_bucket
+  FROM dl_random_ip_rows_perday CROSS JOIN buckets
   GROUP BY
     date,
+    continent_code,
+    country_code,
     state,
     GEOID,
     asn,
     bucket_min,
     bucket_max
 ),
-#############
-ul AS (
+--Repeat for Upload tests
+--Select the initial set of tests
+ul_per_location AS (
   SELECT
     date,
+    client.Geo.ContinentCode AS continent_code,
+    client.Geo.CountryCode AS country_code,
+    CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode) AS state,
     counties.GEOID AS GEOID,
-    CONCAT(client.Geo.CountryCode,"-",client.Geo.Region) AS state,
     client.Network.ASNumber AS asn,
-    NET.SAFE_IP_FROM_STRING(client.IP) AS ip,
+    NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
+    id,
     a.MeanThroughputMbps AS mbps,
     a.MinRTT AS MinRTT
-  FROM
-    `measurement-lab.ndt.unified_uploads` tests, counties
+  FROM `measurement-lab.ndt.unified_uploads`, counties
+  WHERE date BETWEEN @startdate AND @enddate
+  AND client.Geo.Subdivision1ISOCode IS NOT NULL
+  AND client.Geo.Subdivision1ISOCode != ""
+  AND client.Network.ASNumber IS NOT NULL
+  AND ST_WITHIN(
+    ST_GeogPoint(
+      client.Geo.Longitude,
+      client.Geo.Latitude
+    ), counties.WKT
+  )  
+  AND a.MeanThroughputMbps != 0),
+--Filter for only tests With good locations and valid IPs
+ul_per_location_cleaned AS (
+  SELECT * FROM ul_per_location
   WHERE
-    date BETWEEN @startdate AND @enddate
-    AND client.Geo.CountryCode = "US"
-    AND client.Geo.Region IS NOT NULL
-    AND client.Geo.Region != ""
-    AND client.Network.ASNumber IS NOT NULL
-    AND ST_WITHIN(
-      ST_GeogPoint(
-        client.Geo.Longitude,
-        client.Geo.Latitude
-      ), counties.WKT
-    )
+    continent_code IS NOT NULL AND continent_code != ""
+    AND country_code IS NOT NULL AND country_code != ""
+    AND state IS NOT NULL AND state != ""
+    AND GEOID IS NOT NULL AND GEOID != ""
+    AND ip IS NOT NULL
 ),
-ul_stats_perip_perday AS (
+--Fingerprint all cleaned tests, in an arbitrary but repeatable order.
+ul_fingerprinted AS (
   SELECT
     date,
+    continent_code,
+    country_code,
     state,
     GEOID,
     asn,
     ip,
-    MIN(mbps) AS upload_MIN,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(50)] AS upload_MED,
-    AVG(mbps) AS upload_AVG,
-    APPROX_QUANTILES(mbps, 100) [SAFE_ORDINAL(75)] AS upload_Q75,
-    MAX(mbps) AS upload_MAX,
-    APPROX_QUANTILES(MinRTT, 100) [SAFE_ORDINAL(50)] AS upload_minRTT_MED
-  FROM ul
-  GROUP BY date, state, GEOID, asn, ip
+    ARRAY_AGG(STRUCT(ABS(FARM_FINGERPRINT(id)) AS ffid, mbps, MinRTT) ORDER BY ABS(FARM_FINGERPRINT(id))) AS members
+  FROM ul_per_location_cleaned
+  GROUP BY date, continent_code, country_code, state, GEOID, asn, ip
 ),
-ul_stats_perday AS (
+--Select two random rows for each IP using a prime number larger than the 
+--  total number of tests. random1 is used for per day/geo statistics in 
+--  `ul_stats_per_day` and log averages using both random1 and random2
+ul_random_ip_rows_perday AS (
   SELECT
     date,
+    continent_code,
+    country_code,
     state,
     GEOID,
     asn,
-    MIN(upload_MIN) AS upload_MIN,
-    APPROX_QUANTILES(upload_Q25, 100) [SAFE_ORDINAL(25)] AS upload_Q25,
-    APPROX_QUANTILES(upload_MED, 100) [SAFE_ORDINAL(50)] AS upload_MED,
-    AVG(upload_AVG) AS upload_AVG,
-    APPROX_QUANTILES(upload_Q75, 100) [SAFE_ORDINAL(75)] AS upload_Q75,
-    MAX(upload_MAX) AS upload_MAX,
-    APPROX_QUANTILES(upload_minRTT_MED, 100) [SAFE_ORDINAL(50)] AS upload_minRTT_MED
-  FROM ul_stats_perip_perday
-  GROUP BY date, state, GEOID, asn
+    ip,
+    ARRAY_LENGTH(members) AS tests,
+    members[SAFE_OFFSET(MOD(511232941,ARRAY_LENGTH(members)))] AS random1,
+    members[SAFE_OFFSET(MOD(906686609,ARRAY_LENGTH(members)))] AS random2
+  FROM ul_fingerprinted
 ),
-ul_samples_total AS (
+--Calculate log averages and statistics per day from random samples
+ul_stats_per_day AS (
   SELECT
-    date,
-    COUNT(*) AS ul_total_samples,
-    state,
-    GEOID,
-    asn
-  FROM ul
-  GROUP BY
-    date,
-    state,
-    GEOID,
-    asn
+    date, continent_code, country_code, state, GEOID, asn,
+    COUNT(*) AS ul_samples_day,
+    ROUND(POW(10,AVG(Safe.LOG10(random1.mbps))),3) AS ul_LOG_AVG_rnd1,
+    ROUND(POW(10,AVG(Safe.LOG10(random2.mbps))),3) AS ul_LOG_AVG_rnd2,
+    ROUND(POW(10,AVG(Safe.LOG10(random1.MinRtt))),3) AS ul_minRTT_LOG_AVG_rnd1,
+    ROUND(POW(10,AVG(Safe.LOG10(random2.MinRtt))),3) AS ul_minRTT_LOG_AVG_rnd2,
+    ROUND(MIN(random1.mbps),3) AS upload_MIN,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(25)],3) AS upload_Q25,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(50)],3) AS upload_MED,
+    ROUND(AVG(random1.mbps),3) AS upload_AVG,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(75)],3) AS upload_Q75,
+    ROUND(MAX(random1.mbps),3) AS upload_MAX,
+    ROUND(APPROX_QUANTILES(random1.MinRTT, 100) [SAFE_ORDINAL(50)],3) AS upload_minRTT_MED,
+  FROM ul_random_ip_rows_perday
+  GROUP BY date, continent_code, country_code, state, GEOID, asn
 ),
-# Generate the histogram with samples per bucket and frequencies
+--Count the samples that fall into each bucket and get frequencies
 ul_histogram AS (
   SELECT
     date,
+    continent_code,
+    country_code,
     state,
     GEOID,
     asn,
-    CASE WHEN bucket_left = 0.31622776601683794 THEN 0
+    --Set the lowest bucket's min to zero, so all tests below the generated min of the lowest bin are included. 
+    CASE WHEN bucket_left = 0.5623413251903491 THEN 0
     ELSE bucket_left END AS bucket_min,
     bucket_right AS bucket_max,
-    COUNTIF(upload_MED < bucket_right AND upload_MED >= bucket_left) AS ul_samples_bucket,
-    COUNT(*) AS ul_samples_day,
-    COUNTIF(upload_MED < bucket_right AND upload_MED >= bucket_left) / COUNT(*) AS ul_frac
-  FROM ul_stats_perip_perday CROSS JOIN buckets
+    COUNTIF(random1.mbps < bucket_right AND random1.mbps >= bucket_left) AS ul_samples_bucket,
+    ROUND(COUNTIF(random1.mbps < bucket_right AND random1.mbps >= bucket_left) / COUNT(*), 3) AS ul_frac_bucket
+  FROM ul_random_ip_rows_perday CROSS JOIN buckets
   GROUP BY
     date,
+    continent_code,
+    country_code,
     state,
     GEOID,
     asn,
     bucket_min,
     bucket_max
+),
+--Gather final result set
+results AS (
+  SELECT *, MOD(ABS(FARM_FINGERPRINT(state)), 4000) as shard FROM dl_histogram
+  JOIN ul_histogram USING (date, continent_code, country_code, state, GEOID
+  asn, bucket_min, bucket_max)
+  JOIN dl_stats_per_day USING (date, continent_code, country_code, state, GEOID,
+  asn)
+  JOIN ul_stats_per_day USING (date, continent_code, country_code, state, GEOID,
+  asn)
+  JOIN counties_noWKT USING (GEOID)
 )
-# Show the results
-SELECT *, MOD(ABS(FARM_FINGERPRINT(state)), 4000) as shard FROM dl_histogram
-JOIN ul_histogram USING (date, state, GEOID, asn, bucket_min, bucket_max)
-JOIN dl_stats_perday USING (date, state, GEOID, asn)
-JOIN ul_stats_perday USING (date, state, GEOID, asn)
-JOIN counties_noWKT USING (GEOID)
-JOIN dl_samples_total USING (date, state, GEOID, asn)
-JOIN ul_samples_total USING (date, state, GEOID, asn)
+--Show the results
+SELECT * EXCEPT(shard) FROM results
+ORDER BY date, continent_code, country_code, state, GEOID, asn, bucket_min
