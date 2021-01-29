@@ -3,6 +3,8 @@ package pipeline
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -55,6 +57,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		exporter   Exporter
 		config     map[string]config.Config
 		statusCode int
+		response   *pipelineResult
 	}{
 		{
 			name:       "ok",
@@ -63,21 +66,37 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			config:     conf,
 			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?year=2020", bytes.NewReader([]byte{})),
 			statusCode: http.StatusOK,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{histogramsStep, exportsStep},
+				Errors:         []string{},
+			},
 		},
 		{
 			name:       "invalid-method",
 			r:          httptest.NewRequest(http.MethodGet, "/v0/pipeline?year=2020", nil),
 			statusCode: http.StatusMethodNotAllowed,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{},
+				Errors:         []string{"Method not allowed"},
+			},
 		},
 		{
 			name:       "missing-parameter",
 			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline", nil),
 			statusCode: http.StatusBadRequest,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{},
+				Errors:         []string{"Missing mandatory parameter: year"},
+			},
 		},
 		{
 			name:       "action-histogram",
-			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?year=2020&step=histogram", bytes.NewReader([]byte{})),
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?year=2020&step=histograms", bytes.NewReader([]byte{})),
 			statusCode: http.StatusOK,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{histogramsStep},
+				Errors:         []string{},
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -89,6 +108,24 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			if statusCode != tt.statusCode {
 				t.Errorf("ServeHTTP(): expected %v, got %v", tt.statusCode, statusCode)
 			}
+			// Read response body and compare with the expected value.
+			if tt.response != nil {
+				body, err := ioutil.ReadAll(recorder.Result().Body)
+				if err != nil {
+					t.Errorf("Error while reading response body")
+				}
+				var responseJSON pipelineResult
+				err = json.Unmarshal(body, &responseJSON)
+				if err != nil {
+					t.Errorf("Error while unmarshalling response body")
+				}
+
+				if !reflect.DeepEqual(responseJSON, *tt.response) {
+					t.Errorf("Invalid response body: %v, expected %v", responseJSON,
+						tt.response)
+				}
+			}
+
 		})
 	}
 }

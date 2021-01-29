@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -23,14 +24,17 @@ var (
 	}
 )
 
+// HistogramTable is an updatable histogram table.
 type HistogramTable interface {
 	UpdateHistogram(context.Context, time.Time, time.Time) error
 }
 
+// Exporter is a configurable data exporter.
 type Exporter interface {
 	Export(context.Context, config.Config, *template.Template, string) error
 }
 
+// Handler is the handler for /v0/pipeline.
 type Handler struct {
 	bqClient bqiface.Client
 	exporter Exporter
@@ -39,6 +43,26 @@ type Handler struct {
 	pipelineCanRun chan bool
 }
 
+type pipelineStep string
+
+const (
+	histogramsStep pipelineStep = "histograms"
+	exportsStep    pipelineStep = "exports"
+)
+
+type pipelineResult struct {
+	CompletedSteps []pipelineStep
+	Errors         []string
+}
+
+func newPipelineResult() pipelineResult {
+	return pipelineResult{
+		CompletedSteps: []pipelineStep{},
+		Errors:         []string{},
+	}
+}
+
+// NewHandler returns a new Handler.
 func NewHandler(bqClient bqiface.Client, exporter Exporter,
 	config map[string]config.Config) *Handler {
 	pipelineCanRun := make(chan bool, 1)
@@ -66,14 +90,20 @@ func NewHandler(bqClient bqiface.Client, exporter Exporter,
 // This endpoint accepts only POST requests.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer log.Print("handler exited")
+	w.Header().Set("Content-Type", "application/json")
+
+	result := newPipelineResult()
 	if r.Method != http.MethodPost {
+		result.Errors = append(result.Errors, "Method not allowed")
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(result)
 		return
 	}
 	year := r.URL.Query().Get("year")
 	if year == "" {
+		result.Errors = append(result.Errors, "Missing mandatory parameter: year")
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Missing parameter: year"))
+		json.NewEncoder(w).Encode(result)
 		return
 	}
 	select {
@@ -83,8 +113,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.pipelineCanRun <- true
 		}()
 	default:
+		result.Errors = append(result.Errors, "The pipeline is running already.")
 		w.WriteHeader(http.StatusConflict)
-		w.Write([]byte("The pipeline is running already."))
+		json.NewEncoder(w).Encode(result)
 		return
 	}
 
@@ -102,9 +133,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// If one of the histogram queries fail, we still want to try the
 				// remaining ones.
 				log.Printf("Cannot update histogram %s: %v", name, err)
+				result.Errors = append(result.Errors,
+					fmt.Sprintf("Cannot update histogram %s: %v", name, err))
 				continue
 			}
 		}
+		result.CompletedSteps = append(result.CompletedSteps, histogramsStep)
 	}
 
 	if step == "" || step == "exports" {
@@ -115,18 +149,32 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			log.Printf("Exporting %s...", name)
+
 			// Read query file
 			content, err := ioutil.ReadFile(config.ExportQueryFile)
 			if err != nil {
 				log.Printf("Cannot read query file %s, skipping (%v)",
 					config.ExportQueryFile, err)
+				result.Errors = append(result.Errors, fmt.Sprintf(
+					"Cannot read query file %s, skipping (%v)",
+					config.ExportQueryFile, err))
 				continue
 			}
+
 			selectTpl := template.Must(template.New(name).
 				Option("missingkey=zero").Parse(string(content)))
-			h.exporter.Export(r.Context(), config, selectTpl, year)
+			err = h.exporter.Export(r.Context(), config, selectTpl, year)
+			if err != nil {
+				log.Printf("Error while exporting %s: %v",
+					config.Table, err)
+				result.Errors = append(result.Errors, fmt.Sprintf(
+					"Error while exporting %s: %v", config.Table, err))
+			}
 		}
+		result.CompletedSteps = append(result.CompletedSteps, exportsStep)
 	}
+
+	json.NewEncoder(w).Encode(result)
 }
 
 func (h *Handler) generateHistogramForYear(ctx context.Context,
