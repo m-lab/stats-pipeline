@@ -261,5 +261,4 @@ results AS (
   JOIN counties_noWKT USING (GEOID)
 )
 --Show the results
-SELECT * EXCEPT(shard) FROM results
-ORDER BY date, continent_code, country_code, state, GEOID, asn, bucket_min
+SELECT * FROM results

@@ -174,5 +174,4 @@ results AS (
   JOIN ul_stats_per_day USING (date, asn)
 )
 --Show the results
-SELECT * EXCEPT(shard) FROM results
-ORDER BY date, asn, bucket_min
+SELECT * FROM results
