@@ -15,7 +15,7 @@ import (
 
 var (
 	queryBytesProcessMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "stats_pipeline_histogram_query_bytes",
+		Name: "stats_pipeline_histograms_bytes_processed",
 		Help: "Bytes processed by the histogram query",
 	}, []string{
 		"table",
