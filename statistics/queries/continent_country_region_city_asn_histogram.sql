@@ -226,6 +226,4 @@ results AS (
   ISO3166_2region1, city, asn)
 )
 --Show the results
-SELECT * EXCEPT(shard) FROM results
-ORDER BY date, continent_code, country_code, ISO3166_2region1, city, asn,
-bucket_min
+SELECT * FROM results

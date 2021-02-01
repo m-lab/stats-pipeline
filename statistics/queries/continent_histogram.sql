@@ -175,5 +175,4 @@ results AS (
   JOIN ul_stats_per_day USING (date, continent_code)
 )
 --Show the results
-SELECT * EXCEPT(shard) FROM results
-ORDER BY date, continent_code, bucket_min
+SELECT * FROM results

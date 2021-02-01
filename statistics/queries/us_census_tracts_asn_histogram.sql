@@ -310,6 +310,4 @@ results AS (
   state_name, tract_name, lsad_name, GEOID, asn)
 )
 --Show the results
-SELECT * EXCEPT(shard) FROM results
-ORDER BY date, continent_code, country_code, state, state_name, tract_name,
-lsad_name, GEOID, asn, bucket_min
+SELECT * FROM results
