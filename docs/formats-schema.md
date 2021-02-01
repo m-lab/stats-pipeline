@@ -1,34 +1,4 @@
-# Statistics Pipeline Service
-This repository contains code that processes NDT data and provides aggregate
-metrics by day for standard global, and some national geographies. The resulting
-aggregations are made available in JSON format, for use by other applications.
-
-The `stats-pipeline` service is written in Go, runs on GKE, and generates and
-updates daily aggregate statistics. Access is provided in public BigQuery tables
-and in per-year JSON formatted files hosted on GCS.
-
-## Documentation Provided for the Statistics Pipeline Service
-* (This document) Overview of the `stats-pipeline` service, fields provided
-  (schema), output formats, available geographies, and API URL structure.
-* [What Statistics are Provided by `stats-pipeline`, and How are They Calculated?][stats-overview]
-* [Geographic Precision in `stats-pipeline`][geo-precision]
-
-
-[stats-overview]:
-[geo-precision]:
-
-## General Recommendations for All Aggregations of NDT data
-In general, [our recommendations][recommendations] for research aggregating NDT data are:
-
-* Don't oversimplify
-* Aggregate by ASN in addition to time/date and location
-* Be aware and illustrate multimodal distributions
-* Use histogram and logarithmic scales
-* Take into account, and compensate for, client bias and population drift
-
-[recommendations]: upcoming-blog-post
-
-## Statistics Output Format
+# Statistics Output Format
 All statistics provided by this API are for a particular geography and day,
 over a calendar year. In addition, we also provide aggregation of tests per
 Autonomous System Number, identifying statistics per provider within each
@@ -41,7 +11,7 @@ current histogram buckets there are 8 buckets generated. So for each aggregate
 on a given day, there will be 8 JSON objects. For a complete year the file for
 an aggregation will contain 365*8 objects.
 
-### Field Schema and Description
+## Schema and Field Descriptions
 
 Below is a list and description of the fields provided in a JSON object for a
 single day and bucket:
@@ -96,43 +66,7 @@ bucket. |
 | "upload_MAX":3199.958 | The maximum upload speed in megabits per second on this day. |
 | "upload_minRTT_MED":23.83 | The median Minimum Round Trip Time in milliseconds
 for upload measurements on this day. |
-},
-```
 
-<FUTURE> histogram_daily_stats.csv
-Same data as the JSON, but in CSV. Useful for importing into a spreadsheet.
-<FUTURE> histogram_daily_stats.sql
-A SQL query which returns the same rows in the corresponding .json and .csv. Useful for verifying the exported data against the source and to tweak the query as needed by different use cases. 
-
-
-
-GCS Output Paths
-Global level
-/v0/asn/<AS#####>
-
-Continent level
-/v0/<continent_code>/<year>/
-/v0/<continent_code>/asn/<AS#####>/<year>
-
-Country level
-/v0/<continent_code>/<country_code>/<year>/
-/v0/<continent_code>/<country_code>/asn/<AS#####>/<year>
-
-ISO 3166-2 region level 1
-/v0/<continent_code>/<country_code>/<region_code>/<year>/
-/v0/<continent_code>/<country_code>/<region_code>/asn/<AS#####>/<year>
-
-City level
-/v0/<continent_code>/<country_code>/<region_code>/<city_name>/<year>/
-/v0/<continent_code>/<country_code>/<region_code>/<city_name>/asn/<AS#####>/<year>
-
-US Census tract level
-/v0/NA/tracts/<GEOID>/<year>/
-/v0/NA/tracts/<GEOID>/asn/<AS#####>/<year>
-
-US County level
-/v0/NA/US/counties/<GEOID>/<year>
-/v0/NA/US/counties/<GEOID>/asn/<AS#####>/<year>
-
-<FUTURE>
-US Zip Codes, US Congressional Districts, Block Groups, Blocks (desired by NTIA)
+## Statistics Also Available in BigQuery
+In addition to being available in this JSON API, the same data may be queried in
+the following dataset: `measurement-lab.statistics`
