@@ -60,11 +60,12 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		response   *pipelineResult
 	}{
 		{
-			name:       "ok",
-			bqClient:   mc,
-			exporter:   me,
-			config:     conf,
-			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?year=2020", bytes.NewReader([]byte{})),
+			name:     "ok",
+			bqClient: mc,
+			exporter: me,
+			config:   conf,
+			r: httptest.NewRequest(http.MethodPost,
+				"/v0/pipeline?year=2020&step=all", bytes.NewReader([]byte{})),
 			statusCode: http.StatusOK,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{histogramsStep, exportsStep},
@@ -72,21 +73,35 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			},
 		},
 		{
-			name:       "invalid-method",
-			r:          httptest.NewRequest(http.MethodGet, "/v0/pipeline?year=2020", nil),
+			name: "invalid-method",
+			r: httptest.NewRequest(http.MethodGet,
+				"/v0/pipeline?year=2020&step=all", nil),
 			statusCode: http.StatusMethodNotAllowed,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{},
-				Errors:         []string{"Method not allowed"},
+				Errors: []string{
+					http.StatusText(http.StatusMethodNotAllowed),
+				},
 			},
 		},
 		{
-			name:       "missing-parameter",
-			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline", nil),
+			name: "missing-parameter-year",
+			r: httptest.NewRequest(http.MethodPost, "/v0/pipeline",
+				nil),
 			statusCode: http.StatusBadRequest,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{},
-				Errors:         []string{"Missing mandatory parameter: year"},
+				Errors:         []string{errMissingYear},
+			},
+		},
+		{
+			name: "missing-parameter-step",
+			r: httptest.NewRequest(http.MethodPost,
+				"/v0/pipeline?year=2020", nil),
+			statusCode: http.StatusBadRequest,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{},
+				Errors:         []string{errMissingStep},
 			},
 		},
 		{
@@ -138,7 +153,7 @@ func TestNewHandler(t *testing.T) {
 	if h == nil {
 		t.Errorf("NewHandler() returned nil")
 	}
-	if h.bqClient != mc || h.exporter != me || !reflect.DeepEqual(h.config, config) {
+	if h.bqClient != mc || h.exporter != me || !reflect.DeepEqual(h.configs, config) {
 		t.Errorf("NewHandler() didn't return the expected handler")
 	}
 	// Check we can read from the channel.

@@ -38,7 +38,7 @@ type Exporter interface {
 type Handler struct {
 	bqClient bqiface.Client
 	exporter Exporter
-	config   map[string]config.Config
+	configs  map[string]config.Config
 
 	pipelineCanRun chan bool
 }
@@ -70,7 +70,7 @@ func NewHandler(bqClient bqiface.Client, exporter Exporter,
 	return &Handler{
 		bqClient:       bqClient,
 		exporter:       exporter,
-		config:         config,
+		configs:        config,
 		pipelineCanRun: pipelineCanRun,
 	}
 }
@@ -82,10 +82,8 @@ func NewHandler(bqClient bqiface.Client, exporter Exporter,
 //
 // The querystring parameters are:
 // - year (mandatory): the year to generate statistics for.
-//
-// Optional parameters:
 // - step: specify which step of the pipeline to run (histograms or exports).
-//   if unspecified, all the steps will be run.
+//   A value of "all" runs all the steps.
 //
 // This endpoint accepts only POST requests.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -94,14 +92,22 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	result := newPipelineResult()
 	if r.Method != http.MethodPost {
-		result.Errors = append(result.Errors, "Method not allowed")
+		result.Errors = append(result.Errors, http.StatusText(
+			http.StatusMethodNotAllowed))
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(result)
 		return
 	}
 	year := r.URL.Query().Get("year")
 	if year == "" {
-		result.Errors = append(result.Errors, "Missing mandatory parameter: year")
+		result.Errors = append(result.Errors, errMissingYear)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(result)
+		return
+	}
+	step := r.URL.Query().Get("step")
+	if step == "" {
+		result.Errors = append(result.Errors, errMissingStep)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(result)
 		return
@@ -118,11 +124,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(result)
 		return
 	}
-
-	step := r.URL.Query().Get("step")
-	if step == "" || step == "histograms" {
+	if step == "all" || step == "histograms" {
 		// Update all the histogram tables.
-		for name, config := range h.config {
+		for name, config := range h.configs {
 			if r.Context().Err() != nil {
 				// If the request's context has been canceled, we must return here.
 				return
@@ -141,9 +145,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		result.CompletedSteps = append(result.CompletedSteps, histogramsStep)
 	}
 
-	if step == "" || step == "exports" {
+	if step == "all" || step == "exports" {
 		// Export data to GCS.
-		for name, config := range h.config {
+		for name, config := range h.configs {
 			if r.Context().Err() != nil {
 				// If the request's context has been canceled, we must return here.
 				return
