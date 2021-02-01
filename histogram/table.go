@@ -9,6 +9,17 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	queryBytesProcessMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "stats_pipeline_histogram_query_bytes",
+		Help: "Bytes processed by the histogram query",
+	}, []string{
+		"table",
+	})
 )
 
 const (
@@ -107,6 +118,10 @@ func (t *Table) UpdateHistogram(ctx context.Context, start, end time.Time) error
 	query := t.client.Query(t.query)
 	query.SetQueryConfig(qc)
 
+	// Reset bytes process Prometheus gauge for this query.
+	queryBytesProcessMetric.
+		WithLabelValues(t.Table.FullyQualifiedName()).Set(0)
+
 	// Run the histogram generation query.
 	log.Printf("Generating histogram data for table %s\n", t.TableID())
 	bqJob, err := query.Run(ctx)
@@ -117,6 +132,9 @@ func (t *Table) UpdateHistogram(ctx context.Context, start, end time.Time) error
 	if err != nil {
 		return err
 	}
+	// Get bytes processed by the current query.
+	queryBytesProcessMetric.WithLabelValues(t.Table.FullyQualifiedName()).
+		Add(float64(status.Statistics.TotalBytesProcessed))
 	if status.Err() != nil {
 		return status.Err()
 	}
