@@ -22,7 +22,8 @@ WITH
 buckets AS (
 SELECT POW(10, x-.25) AS bucket_min, POW(10,x+.25) AS bucket_max
 FROM UNNEST(GENERATE_ARRAY(0, 3.5, .5)) AS x
-),```
+),
+```
 
 returning 8 buckets with the following ranges:
 
