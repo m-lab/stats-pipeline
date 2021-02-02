@@ -17,7 +17,7 @@ Below is a list and description of the fields provided in a JSON object for a
 single day and bucket:
 
 | Field        | Description                                             |
-|:-------------|:-------------------------------------------------------:|
+|:-------------|:--------------------------------------------------------|
 | "date":"2020-01-01", | The date in `YYYY-MM-DD` format. |
 | "bucket_min":0, | The lower bound of the bucket which the statistics in this object represent. |
 | "bucket_max":1.7782794100389228 | The upper bound of the bucket which the statistics in this object represent. | 
