@@ -25,7 +25,7 @@ In general, [our recommendations][recommendations] for research aggregating NDT 
 
 * Don't oversimplify
 * Aggregate by ASN in addition to time/date and location
-* Be aware and illustrate multimodal distributions
+* Be aware of, and illustrate multimodal distributions
 * Use histogram and logarithmic scales
 * Take into account, and compensate for, client bias and population drift
 

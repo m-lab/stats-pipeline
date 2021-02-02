@@ -12,27 +12,27 @@ The URL structure below defines the geographies available in `stats-api`. At
 each level, aggregates by year and ASN are provided: 
 
 ### Global
-* /v0/asn/<AS#####>/
+* `/v0/asn/<AS#####>/`
 
 At the global geographic level, we aggregate by [Autonomous System Number][asn]
 
 [asn]: https://en.wikipedia.org/wiki/Autonomous_system_%28Internet%29
 
 ### Continent
-* /v0/<continent_code>/<year>/
-* /v0/<continent_code>/asn/<AS#####>/<year>/
+* `/v0/<continent_code>/<year>/`
+* `/v0/<continent_code>/asn/<AS#####>/<year>/`
 
 Continents are represented by the two character continent code.
 
 ### Country
-* /v0/<continent_code>/<country_code>/<year>/
-* /v0/<continent_code>/<country_code>/asn/<AS#####>/<year>/
+* `/v0/<continent_code>/<country_code>/<year>/`
+* `/v0/<continent_code>/<country_code>/asn/<AS#####>/<year>/`
 
 Countries are identified by their two character country code.
 
 ### ISO 3166-2 region level 1
-* /v0/<continent_code>/<country_code>/<region_code>/<year>/
-* /v0/<continent_code>/<country_code>/<region_code>/asn/<AS#####>/<year>/
+* `/v0/<continent_code>/<country_code>/<region_code>/<year>/`
+* `/v0/<continent_code>/<country_code>/<region_code>/asn/<AS#####>/<year>/`
 
 The [ISO 3166-2 standard][iso-3166] is used to identify subdivisions with countries. This
 code begins with the two character country code, appended with a hypen and up to
@@ -41,16 +41,16 @@ three alphanumeric characters.
 [iso-3166]: https://en.wikipedia.org/wiki/ISO_3166-2
 
 ### United States County
-* /v0/NA/US/counties/<GEOID>/<year>/
-* /v0/NA/US/counties/<GEOID>/asn/<AS#####>/<year>/
+* `/v0/NA/US/counties/<GEOID>/<year>/`
+* `/v0/NA/US/counties/<GEOID>/asn/<AS#####>/<year>/`
 
 United States Counties are identified using the shapefile polygons that define
 them, obtained through the US Census Bureau. The `GEOID` of each test is found
 by looking up the polygon that contains the test's annotated latitude and longitude.
 
 ### City
-* /v0/<continent_code>/<country_code>/<region_code>/<city_name>/<year>/
-* /v0/<continent_code>/<country_code>/<region_code>/<city_name>/asn/<AS#####>/<year>/
+* `/v0/<continent_code>/<country_code>/<region_code>/<city_name>/<year>/`
+* `/v0/<continent_code>/<country_code>/<region_code>/<city_name>/asn/<AS#####>/<year>/`
 
 Cities are identified from the IP address annotations present in NDT data after
 it is published.
@@ -80,8 +80,8 @@ generally useful as a point of comparison with other datasets. As such we
 provide aggregation by US Census Tract for this type of use case.
 
 ### United States Census tracts
-* /v0/NA/tracts/<GEOID>/<year>/
-* /v0/NA/tracts/<GEOID>/asn/<AS#####>/<year>/
+* `/v0/NA/tracts/<GEOID>/<year>/`
+* `/v0/NA/tracts/<GEOID>/asn/<AS#####>/<year>/`
 
 [geo-precision]: geo-precision.md
 [community-tools]: https://www.measurementlab.net/data/tools/#community

@@ -7,17 +7,24 @@ query to illustrate how they are accomplished in BigQuery SQL.
 The general approach currently used in the queries `stats-pipeline` uses to
 generate statistics:
 
-| Description | Example |
-|* Establish a set of LOG scale "buckets" within which measurement test results will be
-  grouped.
+## Establish a set of LOG scale "buckets" within which measurement test results will be grouped
   
-  Think of each bucket as a "speed" range-- measurements used in the
-  aggregation will fall within one of the ranges. The fraction of measurements
-  within each bucket in a single day and geography make up the "histogram" for
-  that day in that geography. 
+Bucketing or grouping results is fairly common. Think of the buckets used in
+`stats-pipeline` as "speed" ranges, where all measurements used in the aggregation will
+fall within one of the ranges. The fraction of measurements within each bucket
+in a single day and geography make up the "histogram" for that day in that
+geography.
   
-  The SQL here produces 8 buckets with the following ranges:
+The snippet of SQL below produces our histogram buckets:
+```~sql
+WITH
+--Generate equal sized buckets in log-space between near 0 Mbps and ~1 Gbps+
+buckets AS (
+SELECT POW(10, x-.25) AS bucket_min, POW(10,x+.25) AS bucket_max
+FROM UNNEST(GENERATE_ARRAY(0, 3.5, .5)) AS x
+),```
 
+returning 8 buckets with the following ranges:
 ```
 **bucket_min**       **bucket_max**
 0.56234132519034907  1.7782794100389228
@@ -28,19 +35,11 @@ generate statistics:
 177.82794100389228   562.341325190349
 562.341325190349     1778.2794100389228
 1778.2794100389228   5623.4132519034911
-```| 
-```~sql
-WITH
---Generate equal sized buckets in log-space between near 0 Mbps and ~1 Gbps+
-buckets AS (
-SELECT POW(10, x-.25) AS bucket_left, POW(10,x+.25) AS bucket_right
-FROM UNNEST(GENERATE_ARRAY(0, 3.5, .5)) AS x
-),``` |
-| * Select the initial set of tests and filter out those that may not be properly
-annotated.
+```
 
-Each query in `stats-pipeline` gathers test rows identified between two dates
-and within a geographic level. |
+## Select the initial set of tests and filter out those that may not be properly annotated.
+Each query in `stats-pipeline` gathers test rows identified between two dates and within a geographic level.
+
 ```~sql
 --Select the initial set of tests
 dl_per_location AS (
@@ -63,9 +62,13 @@ dl_per_location_cleaned AS (
     AND continent_code != ""
     AND ip IS NOT NULL
 ),
-``` |
-| * Fingerprint all cleaned tests, and sort in an arbitrary, but repeatable
-order. |
+```
+
+## Fingerprint all cleaned tests, and sort in an arbitrary, but repeatable order
+By using the FARM_FINGERPRINT function, an arbitrary fingerprint is assigned to
+each row. Sorting on the fingerprint, along with the random selection in the
+next section effectively randomizes the set used to aggregate our statistics.
+
 ```~sql
 --Fingerprint all cleaned tests, in an arbitrary but repeatable order
 dl_fingerprinted AS (
@@ -76,9 +79,12 @@ dl_fingerprinted AS (
       ARRAY_AGG(STRUCT(ABS(FARM_FINGERPRINT(id)) AS ffid, mbps, MinRTT) ORDER BY ABS(FARM_FINGERPRINT(id))) AS members
   FROM dl_per_location_cleaned
   GROUP BY date, continent_code, ip
-),``` |
-| * Select two random rows for each IP using a prime number larger than the total number of tests.
-| ```~sql
+),
+```
+
+## Select two random rows for each IP using a prime number larger than the total number of tests
+
+```~sql
 dl_random_ip_rows_perday AS (
   SELECT
     date,
@@ -89,8 +95,11 @@ dl_random_ip_rows_perday AS (
     members[SAFE_OFFSET(MOD(906686609,ARRAY_LENGTH(members)))] AS random2
   FROM dl_fingerprinted
 ),
-``` |
-| * Calculate log averages and statistics per day from random samples | ```~sql
+```
+
+## Calculate log averages and statistics per day from random samples 
+
+```~sql
 dl_stats_per_day AS (
   SELECT
     date, continent_code,
@@ -109,9 +118,11 @@ dl_stats_per_day AS (
   FROM dl_random_ip_rows_perday
   GROUP BY continent_code, date
 ),
-``` |
-| * Count the samples that fall into each bucket and get frequencies for the
-histogram | ```~sql
+```
+
+## Count the samples that fall into each bucket and get frequencies for the histogram
+
+```~sql
 dl_histogram AS (
   SELECT
     date,
