@@ -25,6 +25,7 @@ FROM UNNEST(GENERATE_ARRAY(0, 3.5, .5)) AS x
 ),```
 
 returning 8 buckets with the following ranges:
+
 ```
 **bucket_min**       **bucket_max**
 0.56234132519034907  1.7782794100389228
@@ -40,7 +41,7 @@ returning 8 buckets with the following ranges:
 ## Select the initial set of tests and filter out those that may not be properly annotated.
 Each query in `stats-pipeline` gathers test rows identified between two dates and within a geographic level.
 
-```~sql
+```
 --Select the initial set of tests
 dl_per_location AS (
   SELECT
@@ -69,7 +70,7 @@ By using the FARM_FINGERPRINT function, an arbitrary fingerprint is assigned to
 each row. Sorting on the fingerprint, along with the random selection in the
 next section effectively randomizes the set used to aggregate our statistics.
 
-```~sql
+```
 --Fingerprint all cleaned tests, in an arbitrary but repeatable order
 dl_fingerprinted AS (
   SELECT
@@ -84,7 +85,7 @@ dl_fingerprinted AS (
 
 ## Select two random rows for each IP using a prime number larger than the total number of tests
 
-```~sql
+```
 dl_random_ip_rows_perday AS (
   SELECT
     date,
@@ -99,7 +100,7 @@ dl_random_ip_rows_perday AS (
 
 ## Calculate log averages and statistics per day from random samples 
 
-```~sql
+```
 dl_stats_per_day AS (
   SELECT
     date, continent_code,
@@ -122,7 +123,7 @@ dl_stats_per_day AS (
 
 ## Count the samples that fall into each bucket and get frequencies for the histogram
 
-```~sql
+```
 dl_histogram AS (
   SELECT
     date,
