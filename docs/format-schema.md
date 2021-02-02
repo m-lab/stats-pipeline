@@ -16,26 +16,17 @@ an aggregation will contain 365*8 objects.
 Below is a list and description of the fields provided in a JSON object for a
 single day and bucket:
 
-| Field                | Description                       |
-| -------------------- | :--------------------------------:|
+| Field        | Description                                             |
+|-------------:|:-------------------------------------------------------:|
 | "date":"2020-01-01", | The date in `YYYY-MM-DD` format. |
-| "bucket_min":0, | The lower bound of the bucket which the statistics in this
-object represent. |
-| "bucket_max":1.7782794100389228 | The upper bound of the bucket which the
-statistics in this object represent. | 
-| "dl_LOG_AVG_rnd1":25.591 | The LOG Average of download measurements in this
-aggregation, using the first randomly selected test per IP address in the set.
-Value is presented in megabits per second. |
-| "dl_LOG_AVG_rnd2":25.577 | The LOG Average of download measurements in this
-aggregation, using the second randomly selected test per IP address in the set. Value is presented in megabits per second. |
-| "dl_minRTT_LOG_AVG_rnd1":26.256 | The LOG Average of Minimum Round Trip Time
-of download measurements in this aggregation, using the first randomly selected test per IP address in the set. Value is presented in milliseconds. |
-| "dl_minRTT_LOG_AVG_rnd2":26.268 | The LOG Average of Minimum Round Trip Time
-of download measurements in this aggregation, using the second randomly selected test per IP address in the set. Value is presented in milliseconds. |
-| "dl_frac_bucket":0.057 | The fraction of download measurements within this
-histogram bucket. |
-| "dl_samples_bucket":10695 | The number of download measurement samples in this
-bucket. |
+| "bucket_min":0, | The lower bound of the bucket which the statistics in this object represent. |
+| "bucket_max":1.7782794100389228 | The upper bound of the bucket which the statistics in this object represent. | 
+| "dl_LOG_AVG_rnd1":25.591 | The LOG Average of download measurements in this aggregation, using the first randomly selected test per IP address in the set. Value is presented in megabits per second. |
+| "dl_LOG_AVG_rnd2":25.577 | The LOG Average of download measurements in this aggregation, using the second randomly selected test per IP address in the set. Value is presented in megabits per second. |
+| "dl_minRTT_LOG_AVG_rnd1":26.256 | The LOG Average of Minimum Round Trip Time of download measurements in this aggregation, using the first randomly selected test per IP address in the set. Value is presented in milliseconds. |
+| "dl_minRTT_LOG_AVG_rnd2":26.268 | The LOG Average of Minimum Round Trip Time of download measurements in this aggregation, using the second randomly selected test per IP address in the set. Value is presented in milliseconds. |
+| "dl_frac_bucket":0.057 | The fraction of download measurements within this histogram bucket. |
+| "dl_samples_bucket":10695 | The number of download measurement samples in this bucket. |
 | "dl_samples_day":188725 | The number of download measurement samples on this day. |
 | "download_MIN":0 | The minimum download speed in megabits per second on this day. |
 | "download_Q25":8.141 | The first quartile (25th percentile) download speed in megabits per second on this day. |
@@ -46,19 +37,14 @@ bucket. |
 | "download_minRTT_MED":25 | The median Minimum Round Trip Time in milliseconds
 for download measurements on this day. |
 | "ul_LOG_AVG_rnd1":6.589 | The LOG Average of upload measurements in this
-aggregation, using the first randomly selected test per IP address in the set.
-Value is presented in megabits per second. |
+aggregation, using the first randomly selected test per IP address in the set. Value is presented in megabits per second. |
 | "ul_LOG_AVG_rnd2":6.589 | The LOG Average of upload measurements in this
 aggregation, using the second randomly selected test per IP address in the set.
 Value is presented in megabits per second. |
-| "ul_minRTT_LOG_AVG_rnd1":24.988 | The LOG Average of Minimum Round Trip Time
-of upload measurements in this aggregation, using the first randomly selected test per IP address in the set. Value is presented in milliseconds. |
-| "ul_minRTT_LOG_AVG_rnd2":25.003 | The LOG Average of Minimum Round Trip Time
-of upload measurements in this aggregation, using the second randomly selected test per IP address in the set. Value is presented in milliseconds. |
-| "ul_frac_bucket":0.113 | The fraction of upload measurements within this
-histogram bucket. |
-| "ul_samples_bucket":20769 | The number of upload measurement samples in this
-bucket. |
+| "ul_minRTT_LOG_AVG_rnd1":24.988 | The LOG Average of Minimum Round Trip Time of upload measurements in this aggregation, using the first randomly selected test per IP address in the set. Value is presented in milliseconds. |
+| "ul_minRTT_LOG_AVG_rnd2":25.003 | The LOG Average of Minimum Round Trip Time of upload measurements in this aggregation, using the second randomly selected test per IP address in the set. Value is presented in milliseconds. |
+| "ul_frac_bucket":0.113 | The fraction of upload measurements within this histogram bucket. |
+| "ul_samples_bucket":20769 | The number of upload measurement samples in this bucket. |
 | "ul_samples_day":183326 | The number of upload measurement samples on this day. |
 | "upload_MIN":0 | The minimum upload speed in megabits per second on this day. |
 | "upload_Q25":2.356 | The first quartile (25th percentile) upload speed in megabits per second on this day. |
