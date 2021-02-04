@@ -250,18 +250,18 @@ ul_stats_per_day AS (
   SELECT
     date, continent_code, country_code, state, state_name, tract_name, 
     lsad_name, GEOID, asn,
-    COUNT(*) AS dl_samples_day,
-    ROUND(POW(10,AVG(Safe.LOG10(random1.mbps))),3) AS dl_LOG_AVG_rnd1,
-    ROUND(POW(10,AVG(Safe.LOG10(random2.mbps))),3) AS dl_LOG_AVG_rnd2,
-    ROUND(POW(10,AVG(Safe.LOG10(random1.MinRtt))),3) AS dl_minRTT_LOG_AVG_rnd1,
-    ROUND(POW(10,AVG(Safe.LOG10(random2.MinRtt))),3) AS dl_minRTT_LOG_AVG_rnd2,
-    ROUND(MIN(random1.mbps),3) AS download_MIN,
-    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(25)],3) AS download_Q25,
-    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(50)],3) AS download_MED,
-    ROUND(AVG(random1.mbps),3) AS download_AVG,
-    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(75)],3) AS download_Q75,
-    ROUND(MAX(random1.mbps),3) AS download_MAX,
-    ROUND(APPROX_QUANTILES(random1.MinRTT, 100) [SAFE_ORDINAL(50)],3) AS download_minRTT_MED,
+    COUNT(*) AS ul_samples_day,
+    ROUND(POW(10,AVG(Safe.LOG10(random1.mbps))),3) AS ul_LOG_AVG_rnd1,
+    ROUND(POW(10,AVG(Safe.LOG10(random2.mbps))),3) AS ul_LOG_AVG_rnd2,
+    ROUND(POW(10,AVG(Safe.LOG10(random1.MinRtt))),3) AS ul_minRTT_LOG_AVG_rnd1,
+    ROUND(POW(10,AVG(Safe.LOG10(random2.MinRtt))),3) AS ul_minRTT_LOG_AVG_rnd2,
+    ROUND(MIN(random1.mbps),3) AS upload_MIN,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(25)],3) AS upload_Q25,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(50)],3) AS upload_MED,
+    ROUND(AVG(random1.mbps),3) AS upload_AVG,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(75)],3) AS upload_Q75,
+    ROUND(MAX(random1.mbps),3) AS upload_MAX,
+    ROUND(APPROX_QUANTILES(random1.MinRTT, 100) [SAFE_ORDINAL(50)],3) AS upload_minRTT_MED,
   FROM ul_random_ip_rows_perday
   GROUP BY date, continent_code, country_code, state,  state_name, tract_name, 
     lsad_name, GEOID, asn
@@ -282,8 +282,8 @@ ul_histogram AS (
     CASE WHEN bucket_left = 0.5623413251903491 THEN 0
     ELSE bucket_left END AS bucket_min,
     bucket_right AS bucket_max,
-    COUNTIF(random1.mbps < bucket_right AND random1.mbps >= bucket_left) AS dl_samples_bucket,
-    ROUND(COUNTIF(random1.mbps < bucket_right AND random1.mbps >= bucket_left) / COUNT(*), 3) AS dl_frac_bucket
+    COUNTIF(random1.mbps < bucket_right AND random1.mbps >= bucket_left) AS ul_samples_bucket,
+    ROUND(COUNTIF(random1.mbps < bucket_right AND random1.mbps >= bucket_left) / COUNT(*), 3) AS ul_frac_bucket
   FROM ul_random_ip_rows_perday CROSS JOIN buckets
   GROUP BY
     date,
