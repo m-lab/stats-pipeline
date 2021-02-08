@@ -9,6 +9,7 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
+	"github.com/m-lab/go/prometheusx/promtest"
 	"github.com/m-lab/go/rtx"
 )
 
@@ -208,4 +209,10 @@ func TestTable_UpdateHistogram(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPrometheusMetrics(t *testing.T) {
+	queryBytesProcessMetric.WithLabelValues("x")
+
+	promtest.LintMetrics(t)
 }
