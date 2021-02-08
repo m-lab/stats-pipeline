@@ -118,10 +118,6 @@ func (t *Table) UpdateHistogram(ctx context.Context, start, end time.Time) error
 	query := t.client.Query(t.query)
 	query.SetQueryConfig(qc)
 
-	// Reset bytes process Prometheus gauge for this query.
-	queryBytesProcessMetric.
-		WithLabelValues(t.Table.FullyQualifiedName()).Set(0)
-
 	// Run the histogram generation query.
 	log.Printf("Generating histogram data for table %s\n", t.TableID())
 	bqJob, err := query.Run(ctx)
