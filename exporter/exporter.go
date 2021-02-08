@@ -500,9 +500,11 @@ func getFieldsFromPath(path string) ([]string, error) {
 	return fields, nil
 }
 
-// removeFieldsFromRow returns a new BQ row without the specified fields.
+// removeFieldsFromRow returns a new BQ row without the specified fields. It
+// also removes the partitioning field if present.
 func removeFieldsFromRow(row bqRow, fields []string) bqRow {
 	newRow := bqRow{}
+	fields = append(fields, partitionField)
 	for fieldName, fieldValue := range row {
 		found := false
 		for _, k := range fields {
