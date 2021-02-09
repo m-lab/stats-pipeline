@@ -85,9 +85,9 @@
     },
     "global_asn": {
         "histogramQueryFile": "statistics/queries/global_asn_histogram.sql",
-        "exportQueryFile": "statistics/exports/continents_asn.sql",
+        "exportQueryFile": "statistics/exports/global_asn.sql",
         "dataset": "statistics",
-        "table": "continents_asn",
+        "table": "global_asn",
         "outputPath": "v0/{{ .continent_code }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
     }
 }
