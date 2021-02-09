@@ -1,51 +1,9 @@
 {
-    "continents_asn": {
-        "histogramQueryFile": "statistics/queries/us_asn_histogram.sql",
-        "exportQueryFile": "statistics/exports/continents_asn.sql",
-        "dataset": "statistics",
-        "table": "continents_asn",
-        "outputPath": "v0/{{ .continent_code }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
-    },
     "countries_asn": {
         "histogramQueryFile": "statistics/queries/continent_country_asn_histogram.sql",
         "exportQueryFile": "statistics/exports/continents_asn.sql",
         "dataset": "statistics",
         "table": "countries_asn",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
-    },
-    "regions_asn": {
-        "histogramQueryFile": "statistics/queries/continent_country_region_asn_histogram.sql",
-        "exportQueryFile": "statistics/exports/regions_asn.sql",
-        "dataset": "statistics",
-        "table": "regions_asn",
-        "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
-    },
-    "cities_asn": {
-        "histogramQueryFile": "statistics/queries/continent_country_region_city_asn_histogram.sql",
-        "exportQueryFile": "statistics/exports/cities_asn.sql",
-        "dataset": "statistics",
-        "table": "cities_asn",
-        "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .city }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
-    },
-    "counties_asn": {
-        "histogramQueryFile": "statistics/queries/us_county_asn_histogram.sql",
-        "exportQueryFile": "statistics/exports/us_counties_asn.sql",
-        "dataset": "statistics",
-        "table": "us_counties_asn",
-        "outputPath": "v0/NA/US/counties/{{ .GEOID }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
-    },
-    "tracts_asn": {
-        "histogramQueryFile": "statistics/queries/us_census_tracts_asn_histogram.sql",
-        "exportQueryFile": "statistics/exports/us_tracts_asn.sql",
-        "dataset": "statistics",
-        "table": "us_tracts_asn",
-        "outputPath": "v0/NA/US/tracts/{{ .GEOID }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
-    },
-    "global_asn": {
-        "histogramQueryFile": "statistics/queries/global_asn_histogram.sql",
-        "exportQueryFile": "statistics/exports/global_asn.sql",
-        "dataset": "statistics",
-        "table": "global_asn",
-        "outputPath": "v0/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
     }
 }

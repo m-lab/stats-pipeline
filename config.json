@@ -1,6 +1,6 @@
 {
     "continents_asn": {
-        "histogramQueryFile": "statistics/queries/us_asn_histogram.sql",
+        "histogramQueryFile": "statistics/queries/continent_asn_histogram.sql",
         "exportQueryFile": "statistics/exports/continents_asn.sql",
         "dataset": "statistics",
         "table": "continents_asn",
