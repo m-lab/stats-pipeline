@@ -253,7 +253,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 			}
 			// Atomically increase the queriesDone counter and update metric.
 			atomic.AddInt32(&exporter.queriesDone, 1)
-			queryProcessedMetric.WithLabelValues(config.Table).Inc()
+			queryProcessedMetric.WithLabelValues(sourceTable).Inc()
 
 		}
 	}
