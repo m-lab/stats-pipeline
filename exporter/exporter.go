@@ -339,7 +339,7 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 				if currentRow[f] != lastRow[f] {
 					// upload file, empty currentFile, break
 					exporter.uploadFile(j, currentFile, lastRow)
-					currentFile = currentFile[:0]
+					currentFile = nil
 					break
 				}
 			}
