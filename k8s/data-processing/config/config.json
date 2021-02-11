@@ -6,13 +6,6 @@
         "table": "continents",
         "outputPath": "v0/{{ .continent_code }}/{{ .year }}/histogram_daily_stats.json"
     },
-    "countries": {
-        "histogramQueryFile": "statistics/queries/continent_country_histogram.sql",
-        "exportQueryFile": "statistics/exports/countries.sql",
-        "dataset": "statistics",
-        "table": "countries",
-        "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .year }}/histogram_daily_stats.json"
-    },
     "regions": {
         "histogramQueryFile": "statistics/queries/continent_country_region_histogram.sql",
         "exportQueryFile": "statistics/exports/regions.sql",
@@ -20,26 +13,12 @@
         "table": "regions",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .year }}/histogram_daily_stats.json"
     },
-    "cities": {
-        "histogramQueryFile": "statistics/queries/continent_country_region_city_histogram.sql",
-        "exportQueryFile": "statistics/exports/cities.sql",
-        "dataset": "statistics",
-        "table": "cities",
-        "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .city }}/{{ .year }}/histogram_daily_stats.json"
-    },
     "tracts": {
         "histogramQueryFile": "statistics/queries/us_census_tracts_histogram.sql",
         "exportQueryFile": "statistics/exports/us_tracts.sql",
         "dataset": "statistics",
         "table": "us_tracts",
         "outputPath": "v0/NA/US/tracts/{{ .GEOID }}/{{ .year }}/histogram_daily_stats.json"
-    },
-    "counties": {
-        "histogramQueryFile": "statistics/queries/us_county_histogram.sql",
-        "exportQueryFile": "statistics/exports/us_counties.sql",
-        "dataset": "statistics",
-        "table": "us_counties",
-        "outputPath": "v0/NA/US/counties/{{ .GEOID }}/{{ .year }}/histogram_daily_stats.json"
     },
     "continents_asn": {
         "histogramQueryFile": "statistics/queries/continent_asn_histogram.sql",
@@ -55,13 +34,6 @@
         "table": "countries_asn",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
     },
-    "regions_asn": {
-        "histogramQueryFile": "statistics/queries/continent_country_region_asn_histogram.sql",
-        "exportQueryFile": "statistics/exports/regions_asn.sql",
-        "dataset": "statistics",
-        "table": "regions_asn",
-        "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
-    },
     "cities_asn": {
         "histogramQueryFile": "statistics/queries/continent_country_region_city_asn_histogram.sql",
         "exportQueryFile": "statistics/exports/cities_asn.sql",
@@ -75,13 +47,6 @@
         "dataset": "statistics",
         "table": "us_counties_asn",
         "outputPath": "v0/NA/US/counties/{{ .GEOID }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
-    },
-    "tracts_asn": {
-        "histogramQueryFile": "statistics/queries/us_census_tracts_asn_histogram.sql",
-        "exportQueryFile": "statistics/exports/us_tracts_asn.sql",
-        "dataset": "statistics",
-        "table": "us_tracts_asn",
-        "outputPath": "v0/NA/US/tracts/{{ .GEOID }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
     },
     "global_asn": {
         "histogramQueryFile": "statistics/queries/global_asn_histogram.sql",
