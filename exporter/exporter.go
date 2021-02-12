@@ -86,7 +86,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "stats_pipeline_exporter_uploads_queue_size",
 			Help:    "Upload queue size histogram",
-			Buckets: []float64{0, 1, 2, 4},
+			Buckets: []float64{0, 1, 2, 4, 8, 16},
 		},
 		[]string{"table"},
 	)
@@ -406,8 +406,6 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context,
 			atomic.LoadInt32(&exporter.uploadQLen)))
 
 		inFlightUploadsMetric.WithLabelValues(j.table).Inc()
-		log.Printf("Uploading file: %s %s (size: %d)", exporter.bucket,
-			j.objName, len(j.content))
 		_, err := up.Upload(ctx, j.objName, j.content)
 		inFlightUploadsMetric.WithLabelValues(j.table).Dec()
 
