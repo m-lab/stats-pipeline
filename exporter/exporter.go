@@ -205,7 +205,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 
 	// The number of queries to run is the same as the number of clauses
 	// generated earlier.
-	queryTotalMetric.WithLabelValues(config.Table).Set(float64(len(clauses)))
+	queryTotalMetric.WithLabelValues(sourceTable).Set(float64(len(clauses)))
 
 	// Start a goroutine to print statistics periodically.
 	printStatsCtx, cancelPrintStats := context.WithCancel(ctx)
