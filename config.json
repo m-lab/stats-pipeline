@@ -50,7 +50,7 @@
     },
     "countries_asn": {
         "histogramQueryFile": "statistics/queries/continent_country_asn_histogram.sql",
-        "exportQueryFile": "statistics/exports/continents_asn.sql",
+        "exportQueryFile": "statistics/exports/countries_asn.sql",
         "dataset": "statistics",
         "table": "countries_asn",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
