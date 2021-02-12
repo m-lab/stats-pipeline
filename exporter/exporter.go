@@ -205,12 +205,12 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	exporter.queriesDone = 0
 
 	// Reset metrics for this table to zero.
-	resetMetrics(sourceTable)
+	resetMetrics(config.Table)
 	inFlightUploadsHistogram.Reset()
 
 	// The number of queries to run is the same as the number of clauses
 	// generated earlier.
-	queryTotalMetric.WithLabelValues(sourceTable).Set(float64(len(clauses)))
+	queryTotalMetric.WithLabelValues(config.Table).Set(float64(len(clauses)))
 
 	// Start a goroutine to print statistics periodically.
 	printStatsCtx, cancelPrintStats := context.WithCancel(ctx)
@@ -258,7 +258,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 			}
 			// Atomically increase the queriesDone counter and update metric.
 			atomic.AddInt32(&exporter.queriesDone, 1)
-			queryProcessedMetric.WithLabelValues(sourceTable).Inc()
+			queryProcessedMetric.WithLabelValues(config.Table).Inc()
 		}
 	}
 	// The goroutines' termination is controlled by closing the channels they
