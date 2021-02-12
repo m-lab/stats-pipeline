@@ -88,7 +88,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "stats_pipeline_exporter_uploads_queue_size",
 			Help:    "Upload queue size histogram",
-			Buckets: []float64{0, 1, 2, 4, 8, 16},
+			Buckets: []float64{0, 1, 2, 4, 8},
 		},
 		[]string{"table"},
 	)
@@ -186,6 +186,8 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	// The fully qualified name for a table is project.dataset.table_year.
 	sourceTable := fmt.Sprintf("%s.%s.%s_%s", exporter.projectID, config.Dataset,
 		config.Table, year)
+	// The table_year format is used in some metrics.
+	tableName := fmt.Sprintf("%s_%s", config.Table, year)
 
 	// Generate WHERE clauses to shard the export query.
 	clauses, err := exporter.getPartitionFilters(ctx, sourceTable)
@@ -205,12 +207,13 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	exporter.queriesDone = 0
 
 	// Reset metrics for this table to zero.
-	resetMetrics(config.Table)
+	resetMetrics(sourceTable, tableName)
 	inFlightUploadsHistogram.Reset()
+	uploadQueueSizeHistogram.Reset()
 
 	// The number of queries to run is the same as the number of clauses
 	// generated earlier.
-	queryTotalMetric.WithLabelValues(config.Table).Set(float64(len(clauses)))
+	queryTotalMetric.WithLabelValues(tableName).Set(float64(len(clauses)))
 
 	// Start a goroutine to print statistics periodically.
 	printStatsCtx, cancelPrintStats := context.WithCancel(ctx)
@@ -258,7 +261,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 			}
 			// Atomically increase the queriesDone counter and update metric.
 			atomic.AddInt32(&exporter.queriesDone, 1)
-			queryProcessedMetric.WithLabelValues(config.Table).Inc()
+			queryProcessedMetric.WithLabelValues(tableName).Inc()
 		}
 	}
 	// The goroutines' termination is controlled by closing the channels they
@@ -535,9 +538,9 @@ func removeFieldsFromRow(row bqRow, fields []string) bqRow {
 }
 
 // resetMetrics sets all the metrics for a given table to zero.
-func resetMetrics(table string) {
-	queryProcessedMetric.WithLabelValues(table).Set(0)
-	uploadedBytesMetric.WithLabelValues(table).Set(0)
-	bytesProcessedMetric.WithLabelValues(table).Set(0)
-	cacheHitMetric.WithLabelValues(table).Set(0)
+func resetMetrics(sourceTable, tableName string) {
+	queryProcessedMetric.WithLabelValues(tableName).Set(0)
+	uploadedBytesMetric.WithLabelValues(sourceTable).Set(0)
+	bytesProcessedMetric.WithLabelValues(sourceTable).Set(0)
+	cacheHitMetric.WithLabelValues(sourceTable).Set(0)
 }
