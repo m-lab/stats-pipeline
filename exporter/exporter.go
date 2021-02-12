@@ -78,7 +78,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "stats_pipeline_exporter_inflight_uploads",
 			Help:    "Inflight uploads histogram",
-			Buckets: []float64{1, 2, 4, 8},
+			Buckets: []float64{1, 2, 4, 8, 16},
 		},
 		[]string{"table"},
 	)
