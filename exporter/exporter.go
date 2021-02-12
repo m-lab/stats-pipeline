@@ -31,7 +31,7 @@ const (
 	nQueryWorkers = 15
 
 	// Number of goroutines for uploading to GCS.
-	nUploadWorkers = 25
+	nUploadWorkers = 30
 
 	// Name of the field used to partition tables.
 	partitionField = "shard"
@@ -74,12 +74,14 @@ var (
 		"table",
 	})
 
-	inFlightUploadsMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "stats_pipeline_exporter_uploads_inflight",
-		Help: "Number of in-flight uploads",
-	}, []string{
-		"table",
-	})
+	inFlightUploadsHistogram = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "stats_pipeline_exporter_inflight_uploads",
+			Help:    "Inflight uploads histogram",
+			Buckets: []float64{1, 2, 4, 8},
+		},
+		[]string{"table"},
+	)
 
 	// Histogram bucket to record the upload queue size.
 	uploadQueueSizeHistogram = promauto.NewHistogramVec(
@@ -107,8 +109,9 @@ type JSONExporter struct {
 	uploadJobs chan *UploadJob
 	results    chan UploadResult
 
-	queriesDone int32
-	uploadQLen  int32
+	queriesDone     int32
+	uploadQLen      int32
+	inflightUploads int32
 }
 
 // UploadJob is a job for uploading data to a GCS bucket.
@@ -198,10 +201,12 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 
 	// Set counters to zero.
 	exporter.uploadQLen = 0
+	exporter.inflightUploads = 0
 	exporter.queriesDone = 0
 
 	// Reset metrics for this table to zero.
 	resetMetrics(sourceTable)
+	inFlightUploadsHistogram.Reset()
 
 	// The number of queries to run is the same as the number of clauses
 	// generated earlier.
@@ -306,7 +311,6 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 			bytesProcessedMetric.WithLabelValues(j.name).Add(float64(queryDetails.TotalBytesProcessed))
 		}
 		// Iterate over the returned rows and upload results to GCS.
-		log.Println("Call processQueryResults")
 		err = exporter.processQueryResults(it, j)
 		if err != nil {
 			log.Print(err)
@@ -362,7 +366,6 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 
 	if err == iterator.Done {
 		// If this was the last row, upload the file so far.
-		log.Println("Last row, send file to upload")
 		exporter.uploadFile(j, currentFile, lastRow)
 		// This is the expected behavior, so we don't consider this an error.
 		return nil
@@ -405,9 +408,11 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context,
 		uploadQueueSizeHistogram.WithLabelValues(j.table).Observe(float64(
 			atomic.LoadInt32(&exporter.uploadQLen)))
 
-		inFlightUploadsMetric.WithLabelValues(j.table).Inc()
+		atomic.AddInt32(&exporter.inflightUploads, 1)
+		inFlightUploadsHistogram.WithLabelValues(j.table).Observe(float64(
+			atomic.LoadInt32(&exporter.inflightUploads)))
 		_, err := up.Upload(ctx, j.objName, j.content)
-		inFlightUploadsMetric.WithLabelValues(j.table).Dec()
+		atomic.AddInt32(&exporter.inflightUploads, -1)
 
 		uploadedBytesMetric.WithLabelValues(j.table).Add(float64(len(j.content)))
 		exporter.results <- UploadResult{
@@ -532,7 +537,6 @@ func removeFieldsFromRow(row bqRow, fields []string) bqRow {
 // resetMetrics sets all the metrics for a given table to zero.
 func resetMetrics(table string) {
 	queryProcessedMetric.WithLabelValues(table).Set(0)
-	inFlightUploadsMetric.WithLabelValues(table).Set(0)
 	uploadedBytesMetric.WithLabelValues(table).Set(0)
 	bytesProcessedMetric.WithLabelValues(table).Set(0)
 	cacheHitMetric.WithLabelValues(table).Set(0)
