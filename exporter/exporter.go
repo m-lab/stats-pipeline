@@ -396,6 +396,8 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context,
 			atomic.LoadInt32(&exporter.uploadQLen)))
 
 		inFlightUploadsMetric.WithLabelValues(j.table).Inc()
+		fmt.Printf("Uploading file: %s %s (size: %d)", exporter.bucket,
+			j.objName, len(j.content))
 		_, err := up.Upload(ctx, j.objName, j.content)
 		inFlightUploadsMetric.WithLabelValues(j.table).Dec()
 
