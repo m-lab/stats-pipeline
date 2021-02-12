@@ -374,6 +374,7 @@ func (exporter *JSONExporter) uploadFile(j *QueryJob, rows []bqRow, lastRow bqRo
 	if err != nil {
 		return err
 	}
+	fmt.Printf("Adding file to queue: %s\n", buf.String())
 	atomic.AddInt32(&exporter.uploadQLen, 1)
 	marshalAndUpload(j.name, buf.String(), rows, exporter.uploadJobs)
 	return nil
