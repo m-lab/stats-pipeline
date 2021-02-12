@@ -216,6 +216,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	// Create queryWorkers.
 	for w := 1; w <= nQueryWorkers; w++ {
 		queryWg.Add(1)
+		log.Printf("Created queryWorker with ID: %d\n", w)
 		go exporter.queryWorker(ctx, &queryWg)
 	}
 
@@ -244,7 +245,6 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 			// If the context has been closed, we stop writing to the channel.
 			break
 		default:
-			log.Printf("Running query: %s", buf.String())
 			exporter.queryJobs <- &QueryJob{
 				name:       sourceTable,
 				query:      buf.String(),
@@ -254,7 +254,6 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 			// Atomically increase the queriesDone counter and update metric.
 			atomic.AddInt32(&exporter.queriesDone, 1)
 			queryProcessedMetric.WithLabelValues(sourceTable).Inc()
-
 		}
 	}
 	// The goroutines' termination is controlled by closing the channels they
@@ -278,6 +277,7 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 
 	for j := range exporter.queryJobs {
 		// Run the SELECT query to get histogram data.
+		log.Printf("Running query: %s", j.query)
 		q := exporter.bqClient.Query(j.query)
 		job, err := q.Run(ctx)
 		if err != nil {
@@ -306,12 +306,22 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 			bytesProcessedMetric.WithLabelValues(j.name).Add(float64(queryDetails.TotalBytesProcessed))
 		}
 		// Iterate over the returned rows and upload results to GCS.
+		log.Println("Call processQueryResults")
 		err = exporter.processQueryResults(it, j)
 		if err != nil {
 			log.Print(err)
 			continue
 		}
 	}
+}
+
+func equals(a, b bigquery.Value) bool {
+	if val, ok := a.(string); ok {
+		return val == b.(string)
+	} else if val, ok := a.(int64); ok {
+		return val == b.(int64)
+	}
+	return false
 }
 
 // processQueryResults loops over a RowIterator.
@@ -335,9 +345,12 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 		// If any of j.fields changed between this row and the previous one,
 		// upload the current file. Ignore the first row.
 		if lastRow != nil {
+			log.Printf("last: %s", lastRow["country_code"])
+			log.Printf("current: %s", currentRow["country_code"])
 			for _, f := range j.fields {
 				if currentRow[f] != lastRow[f] {
 					// upload file, empty currentFile, break
+					log.Println("File changed, send file to upload")
 					exporter.uploadFile(j, currentFile, lastRow)
 					currentFile = nil
 					break
@@ -348,11 +361,20 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 		// row to currentFile. Fields that appear in the output path are
 		// removed to avoid redundancy in the JSON and create smaller files.
 		currentFile = append(currentFile, removeFieldsFromRow(currentRow, j.fields))
-		lastRow = currentRow
+		// Save relevant fields for comparison in the next iteration.
+		// Note: we can't just do lastRow = currentRow here as it would be a
+		// reference; we need to copy.
+		if lastRow == nil {
+			lastRow = make(bqRow)
+		}
+		for _, f := range j.fields {
+			lastRow[f] = currentRow[f]
+		}
 	}
 
 	if err == iterator.Done {
 		// If this was the last row, upload the file so far.
+		log.Println("Last row, send file to upload")
 		exporter.uploadFile(j, currentFile, lastRow)
 		// This is the expected behavior, so we don't consider this an error.
 		return nil
