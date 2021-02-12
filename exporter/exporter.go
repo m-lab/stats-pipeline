@@ -315,15 +315,6 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 	}
 }
 
-func equals(a, b bigquery.Value) bool {
-	if val, ok := a.(string); ok {
-		return val == b.(string)
-	} else if val, ok := a.(int64); ok {
-		return val == b.(int64)
-	}
-	return false
-}
-
 // processQueryResults loops over a RowIterator.
 // For each row it generates a row key combining the fields in QueryJob.fields.
 // When the row key changes, it means a file containing the rows read so far
@@ -345,12 +336,9 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 		// If any of j.fields changed between this row and the previous one,
 		// upload the current file. Ignore the first row.
 		if lastRow != nil {
-			log.Printf("last: %s", lastRow["country_code"])
-			log.Printf("current: %s", currentRow["country_code"])
 			for _, f := range j.fields {
 				if currentRow[f] != lastRow[f] {
 					// upload file, empty currentFile, break
-					log.Println("File changed, send file to upload")
 					exporter.uploadFile(j, currentFile, lastRow)
 					currentFile = nil
 					break
