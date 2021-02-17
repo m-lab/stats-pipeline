@@ -5,7 +5,8 @@ buckets AS (
   FROM UNNEST(GENERATE_ARRAY(0, 3.5, .5)) AS x
 ),
 --Select the initial set of tests
-dl_per_location AS (
+--Filter for only tests With good locations and valid IPs
+dl_per_location_cleaned AS (
   SELECT
     date,
     client.Geo.ContinentCode AS continent_code,
@@ -20,17 +21,12 @@ dl_per_location AS (
   FROM `measurement-lab.ndt.unified_downloads`
   WHERE date BETWEEN @startdate AND @enddate
   AND a.MeanThroughputMbps != 0
-),
---Filter for only tests With good locations and valid IPs
-dl_per_location_cleaned AS (
-  SELECT * FROM dl_per_location
-  WHERE
-    continent_code IS NOT NULL AND continent_code != ""
-    AND country_code IS NOT NULL AND country_code != ""
-    AND ISO3166_2region1 IS NOT NULL AND ISO3166_2region1 != ""
-    AND city IS NOT NULL AND city != ""
-    AND asn IS NOT NULL
-    AND ip IS NOT NULL
+  AND client.Geo.ContinentCode IS NOT NULL AND client.Geo.ContinentCode != ""
+  AND client.Geo.CountryCode IS NOT NULL AND client.Geo.CountryCode != ""
+  AND client.Geo.Subdivision1ISOCode IS NOT NULL AND client.Geo.Subdivision1ISOCode != ""
+  AND client.Geo.City IS NOT NULL AND client.Geo.City != ""
+  AND client.Network.ASNumber IS NOT NULL
+  AND Client.IP IS NOT NULL
 ),
 --Fingerprint all cleaned tests, in an arbitrary but repeatable order
 dl_fingerprinted AS (
@@ -110,7 +106,8 @@ dl_histogram AS (
 ),
 --Repeat for Upload tests
 --Select the initial set of tests
-ul_per_location AS (
+--Filter for only tests With good locations and valid IPs
+ul_per_location_cleaned AS (
   SELECT
     date,
     client.Geo.ContinentCode AS continent_code,
@@ -126,17 +123,12 @@ ul_per_location AS (
   FROM `measurement-lab.ndt.unified_uploads`
   WHERE date BETWEEN @startdate AND @enddate
   AND a.MeanThroughputMbps != 0
-),
---Filter for only tests With good locations and valid IPs
-ul_per_location_cleaned AS (
-  SELECT * FROM ul_per_location
-  WHERE
-    continent_code IS NOT NULL AND continent_code != ""
-    AND country_code IS NOT NULL AND country_code != ""
-    AND ISO3166_2region1 IS NOT NULL AND ISO3166_2region1 != ""
-    AND city IS NOT NULL AND city != ""
-    AND asn IS NOT NULL
-    AND ip IS NOT NULL
+  AND client.Geo.ContinentCode IS NOT NULL AND client.Geo.ContinentCode != ""
+  AND client.Geo.CountryCode IS NOT NULL AND client.Geo.CountryCode != ""
+  AND client.Geo.Subdivision1ISOCode IS NOT NULL AND client.Geo.Subdivision1ISOCode != ""
+  AND client.Geo.City IS NOT NULL AND client.Geo.City != ""
+  AND client.Network.ASNumber IS NOT NULL
+  AND Client.IP IS NOT NULL
 ),
 --Fingerprint all cleaned tests, in an arbitrary but repeatable order.
 ul_fingerprinted AS (
@@ -216,7 +208,7 @@ ul_histogram AS (
 ),
 --Gather final result set
 results AS (
-  SELECT *, MOD(ABS(FARM_FINGERPRINT(city)), 4000) as shard FROM
+  SELECT *, MOD(ABS(FARM_FINGERPRINT(CAST(asn AS STRING))), 4000) as shard FROM
   dl_histogram
   JOIN ul_histogram USING (date, continent_code, country_code,
   ISO3166_2region1, city, asn, bucket_min, bucket_max)

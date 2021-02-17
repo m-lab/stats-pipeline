@@ -5,13 +5,13 @@ buckets AS (
   FROM UNNEST(GENERATE_ARRAY(0, 3.5, .5)) AS x
 ),
 --Select the initial set of tests
-dl_per_location AS (
+--Filter for only tests With good locations and valid IPs
+dl_per_location_cleaned AS (
   SELECT
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CONCAT(client.Geo.CountryCode, '-', client.Geo.Subdivision1ISOCode) AS 
-    ISO3166_2region1,
+    CONCAT(client.Geo.CountryCode, '-', client.Geo.Subdivision1ISOCode) AS ISO3166_2region1,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
     a.MeanThroughputMbps AS mbps,
@@ -19,15 +19,10 @@ dl_per_location AS (
   FROM `measurement-lab.ndt.unified_downloads`
   WHERE date BETWEEN @startdate AND @enddate
   AND a.MeanThroughputMbps != 0
-),
---Filter for only tests With good locations and valid IPs
-dl_per_location_cleaned AS (
-  SELECT * FROM dl_per_location
-  WHERE
-    continent_code IS NOT NULL AND continent_code != ""
-    AND country_code IS NOT NULL AND country_code != ""
-    AND ISO3166_2region1 IS NOT NULL AND ISO3166_2region1 != ""
-    AND ip IS NOT NULL
+  AND client.Geo.ContinentCode IS NOT NULL AND client.Geo.ContinentCode != ""
+  AND client.Geo.CountryCode IS NOT NULL AND client.Geo.CountryCode != ""
+  AND client.Geo.Subdivision1ISOCode IS NOT NULL AND client.Geo.Subdivision1ISOCode != ""
+  AND Client.IP IS NOT NULL
 ),
 --Fingerprint all cleaned tests, in an arbitrary but repeatable order
 dl_fingerprinted AS (
@@ -99,12 +94,14 @@ dl_histogram AS (
 ),
 --Repeat for Upload tests
 --Select the initial set of tests
-ul_per_location AS (
+--Filter for only tests With good locations and valid IPs
+ul_per_location_cleaned AS (
   SELECT
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CONCAT(client.Geo.CountryCode, '-', client.Geo.Subdivision1ISOCode) AS ISO3166_2region1,
+    CONCAT(client.Geo.CountryCode, '-', client.Geo.Subdivision1ISOCode) AS
+    ISO3166_2region1,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
     a.MeanThroughputMbps AS mbps,
@@ -112,15 +109,10 @@ ul_per_location AS (
   FROM `measurement-lab.ndt.unified_uploads`
   WHERE date BETWEEN @startdate AND @enddate
   AND a.MeanThroughputMbps != 0
-),
---Filter for only tests With good locations and valid IPs
-ul_per_location_cleaned AS (
-  SELECT * FROM ul_per_location
-  WHERE
-    continent_code IS NOT NULL AND continent_code != ""
-    AND country_code IS NOT NULL AND country_code != ""
-    AND ISO3166_2region1 IS NOT NULL AND ISO3166_2region1 != ""
-    AND ip IS NOT NULL
+  AND client.Geo.ContinentCode IS NOT NULL AND client.Geo.ContinentCode != ""
+  AND client.Geo.CountryCode IS NOT NULL AND client.Geo.CountryCode != ""
+  AND client.Geo.Subdivision1ISOCode IS NOT NULL AND client.Geo.Subdivision1ISOCode != ""
+  AND Client.IP IS NOT NULL
 ),
 --Fingerprint all cleaned tests, in an arbitrary but repeatable order.
 ul_fingerprinted AS (

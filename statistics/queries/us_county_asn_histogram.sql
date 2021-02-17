@@ -251,8 +251,8 @@ ul_histogram AS (
 ),
 --Gather final result set
 results AS (
-  SELECT *, MOD(ABS(FARM_FINGERPRINT(state)), 4000) as shard FROM dl_histogram
-  JOIN ul_histogram USING (date, continent_code, country_code, state, GEOID
+  SELECT *, MOD(ABS(FARM_FINGERPRINT(CAST(asn AS STRING))), 4000) as shard FROM dl_histogram
+  JOIN ul_histogram USING (date, continent_code, country_code, state, GEOID,
   asn, bucket_min, bucket_max)
   JOIN dl_stats_per_day USING (date, continent_code, country_code, state, GEOID,
   asn)

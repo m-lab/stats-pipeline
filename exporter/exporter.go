@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"regexp"
@@ -23,19 +24,9 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-const (
-	// TODO(roberto): make these values configurable, either from a
-	// command-line argument or on a per-export basis in the configuration
-	// file. There is probably some potential for extra optimizations here.
-	// Number of goroutines for querying BQ.
-	nQueryWorkers = 15
-
-	// Number of goroutines for uploading to GCS.
-	nUploadWorkers = 25
-
-	// Name of the field used to partition tables.
-	partitionField = "shard"
-)
+// Field used for partitioning tables. Must match what is used in the histogram
+// queries.
+const partitionField = "shard"
 
 var (
 	fieldRegex           = regexp.MustCompile(`{{\s*\.([A-Za-z0-9_]+)\s*}}`)
@@ -74,22 +65,32 @@ var (
 		"table",
 	})
 
-	inFlightUploadsMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "stats_pipeline_exporter_uploads_inflight",
-		Help: "Number of in-flight uploads",
-	}, []string{
-		"table",
-	})
+	inFlightUploadsHistogram = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "stats_pipeline_exporter_inflight_uploads",
+			Help:    "Inflight uploads histogram",
+			Buckets: []float64{1, 2, 4, 8, 16},
+		},
+		[]string{"table"},
+	)
 
 	// Histogram bucket to record the upload queue size.
 	uploadQueueSizeHistogram = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "stats_pipeline_exporter_uploads_queue_size",
 			Help:    "Upload queue size histogram",
-			Buckets: []float64{0, 1, 2, 4},
+			Buckets: []float64{0, 1, 2, 4, 8},
 		},
 		[]string{"table"},
 	)
+
+	// Number of goroutines for querying BQ.
+	nQueryWorkers = flag.Int("exporter.query-workers", 15,
+		"Number of goroutines to use for parallel querying")
+
+	// Name of the field used to partition tables.
+	nUploadWorkers = flag.Int("exporter.upload-workers", 30,
+		"Number of goroutines to use for parallel upload")
 )
 
 // Convenience type for a bigquery row.
@@ -107,8 +108,9 @@ type JSONExporter struct {
 	uploadJobs chan *UploadJob
 	results    chan UploadResult
 
-	queriesDone int32
-	uploadQLen  int32
+	queriesDone     int32
+	uploadQLen      int32
+	inflightUploads int32
 }
 
 // UploadJob is a job for uploading data to a GCS bucket.
@@ -183,6 +185,8 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	// The fully qualified name for a table is project.dataset.table_year.
 	sourceTable := fmt.Sprintf("%s.%s.%s_%s", exporter.projectID, config.Dataset,
 		config.Table, year)
+	// The table_year format is used in some metrics.
+	tableName := fmt.Sprintf("%s_%s", config.Table, year)
 
 	// Generate WHERE clauses to shard the export query.
 	clauses, err := exporter.getPartitionFilters(ctx, sourceTable)
@@ -198,14 +202,17 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 
 	// Set counters to zero.
 	exporter.uploadQLen = 0
+	exporter.inflightUploads = 0
 	exporter.queriesDone = 0
 
 	// Reset metrics for this table to zero.
-	resetMetrics(sourceTable)
+	resetMetrics(tableName)
+	inFlightUploadsHistogram.Reset()
+	uploadQueueSizeHistogram.Reset()
 
 	// The number of queries to run is the same as the number of clauses
 	// generated earlier.
-	queryTotalMetric.WithLabelValues(config.Table).Set(float64(len(clauses)))
+	queryTotalMetric.WithLabelValues(tableName).Set(float64(len(clauses)))
 
 	// Start a goroutine to print statistics periodically.
 	printStatsCtx, cancelPrintStats := context.WithCancel(ctx)
@@ -214,15 +221,16 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 
 	queryWg := sync.WaitGroup{}
 	// Create queryWorkers.
-	for w := 1; w <= nQueryWorkers; w++ {
+	for w := 1; w <= *nQueryWorkers; w++ {
 		queryWg.Add(1)
+		log.Printf("Created queryWorker with ID: %d\n", w)
 		go exporter.queryWorker(ctx, &queryWg)
 	}
 
 	// Create uploadWorkers.
 	up := uploader.New(exporter.storageClient, exporter.bucket)
 	uploadWg := sync.WaitGroup{}
-	for w := 1; w <= nUploadWorkers; w++ {
+	for w := 1; w <= *nUploadWorkers; w++ {
 		uploadWg.Add(1)
 		go exporter.uploadWorker(ctx, &uploadWg, up)
 	}
@@ -244,17 +252,15 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 			// If the context has been closed, we stop writing to the channel.
 			break
 		default:
-			log.Printf("Running query: %s", buf.String())
 			exporter.queryJobs <- &QueryJob{
-				name:       sourceTable,
+				name:       tableName,
 				query:      buf.String(),
 				fields:     fields,
 				outputPath: outputPath,
 			}
 			// Atomically increase the queriesDone counter and update metric.
 			atomic.AddInt32(&exporter.queriesDone, 1)
-			queryProcessedMetric.WithLabelValues(config.Table).Inc()
-
+			queryProcessedMetric.WithLabelValues(tableName).Inc()
 		}
 	}
 	// The goroutines' termination is controlled by closing the channels they
@@ -278,6 +284,7 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 
 	for j := range exporter.queryJobs {
 		// Run the SELECT query to get histogram data.
+		log.Printf("Running query: %s", j.query)
 		q := exporter.bqClient.Query(j.query)
 		job, err := q.Run(ctx)
 		if err != nil {
@@ -339,7 +346,7 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 				if currentRow[f] != lastRow[f] {
 					// upload file, empty currentFile, break
 					exporter.uploadFile(j, currentFile, lastRow)
-					currentFile = currentFile[:0]
+					currentFile = nil
 					break
 				}
 			}
@@ -348,7 +355,15 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 		// row to currentFile. Fields that appear in the output path are
 		// removed to avoid redundancy in the JSON and create smaller files.
 		currentFile = append(currentFile, removeFieldsFromRow(currentRow, j.fields))
-		lastRow = currentRow
+		// Save relevant fields for comparison in the next iteration.
+		// Note: we can't just do lastRow = currentRow here as it would be a
+		// reference; we need to copy.
+		if lastRow == nil {
+			lastRow = make(bqRow)
+		}
+		for _, f := range j.fields {
+			lastRow[f] = currentRow[f]
+		}
 	}
 
 	if err == iterator.Done {
@@ -395,9 +410,11 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context,
 		uploadQueueSizeHistogram.WithLabelValues(j.table).Observe(float64(
 			atomic.LoadInt32(&exporter.uploadQLen)))
 
-		inFlightUploadsMetric.WithLabelValues(j.table).Inc()
+		atomic.AddInt32(&exporter.inflightUploads, 1)
+		inFlightUploadsHistogram.WithLabelValues(j.table).Observe(float64(
+			atomic.LoadInt32(&exporter.inflightUploads)))
 		_, err := up.Upload(ctx, j.objName, j.content)
-		inFlightUploadsMetric.WithLabelValues(j.table).Dec()
+		atomic.AddInt32(&exporter.inflightUploads, -1)
 
 		uploadedBytesMetric.WithLabelValues(j.table).Add(float64(len(j.content)))
 		exporter.results <- UploadResult{
@@ -520,10 +537,9 @@ func removeFieldsFromRow(row bqRow, fields []string) bqRow {
 }
 
 // resetMetrics sets all the metrics for a given table to zero.
-func resetMetrics(table string) {
-	queryProcessedMetric.WithLabelValues(table).Set(0)
-	inFlightUploadsMetric.WithLabelValues(table).Set(0)
-	uploadedBytesMetric.WithLabelValues(table).Set(0)
-	bytesProcessedMetric.WithLabelValues(table).Set(0)
-	cacheHitMetric.WithLabelValues(table).Set(0)
+func resetMetrics(tableName string) {
+	queryProcessedMetric.WithLabelValues(tableName).Set(0)
+	uploadedBytesMetric.WithLabelValues(tableName).Set(0)
+	bytesProcessedMetric.WithLabelValues(tableName).Set(0)
+	cacheHitMetric.WithLabelValues(tableName).Set(0)
 }
