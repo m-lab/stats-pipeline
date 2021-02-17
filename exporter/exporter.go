@@ -206,6 +206,9 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	exporter.queriesDone = 0
 
 	// Reset metrics for this table to zero.
+	// TODO(roberto): Ideally we should just use tableName here. Make sure the
+	// value is plumbed all the way to uploaders and query workers so they can
+	// update the metric with tableName rather than sourceTable.
 	resetMetrics(sourceTable, tableName)
 	inFlightUploadsHistogram.Reset()
 	uploadQueueSizeHistogram.Reset()
