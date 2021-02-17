@@ -206,10 +206,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	exporter.queriesDone = 0
 
 	// Reset metrics for this table to zero.
-	// TODO(roberto): Ideally we should just use tableName here. Make sure the
-	// value is plumbed all the way to uploaders and query workers so they can
-	// update the metric with tableName rather than sourceTable.
-	resetMetrics(sourceTable, tableName)
+	resetMetrics(tableName)
 	inFlightUploadsHistogram.Reset()
 	uploadQueueSizeHistogram.Reset()
 
@@ -256,7 +253,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 			break
 		default:
 			exporter.queryJobs <- &QueryJob{
-				name:       sourceTable,
+				name:       tableName,
 				query:      buf.String(),
 				fields:     fields,
 				outputPath: outputPath,
@@ -540,9 +537,9 @@ func removeFieldsFromRow(row bqRow, fields []string) bqRow {
 }
 
 // resetMetrics sets all the metrics for a given table to zero.
-func resetMetrics(sourceTable, tableName string) {
+func resetMetrics(tableName string) {
 	queryProcessedMetric.WithLabelValues(tableName).Set(0)
-	uploadedBytesMetric.WithLabelValues(sourceTable).Set(0)
-	bytesProcessedMetric.WithLabelValues(sourceTable).Set(0)
-	cacheHitMetric.WithLabelValues(sourceTable).Set(0)
+	uploadedBytesMetric.WithLabelValues(tableName).Set(0)
+	bytesProcessedMetric.WithLabelValues(tableName).Set(0)
+	cacheHitMetric.WithLabelValues(tableName).Set(0)
 }
