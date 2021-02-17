@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"regexp"
@@ -23,19 +24,9 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-const (
-	// TODO(roberto): make these values configurable, either from a
-	// command-line argument or on a per-export basis in the configuration
-	// file. There is probably some potential for extra optimizations here.
-	// Number of goroutines for querying BQ.
-	nQueryWorkers = 15
-
-	// Number of goroutines for uploading to GCS.
-	nUploadWorkers = 30
-
-	// Name of the field used to partition tables.
-	partitionField = "shard"
-)
+// Field used for partitioning tables. Must match what is used in the histogram
+// queries.
+const partitionField = "shard"
 
 var (
 	fieldRegex           = regexp.MustCompile(`{{\s*\.([A-Za-z0-9_]+)\s*}}`)
@@ -92,6 +83,14 @@ var (
 		},
 		[]string{"table"},
 	)
+
+	// Number of goroutines for querying BQ.
+	nQueryWorkers = flag.Int("exporter.query-workers", 15,
+		"Number of goroutines to use for parallel querying")
+
+	// Name of the field used to partition tables.
+	nUploadWorkers = flag.Int("exporter.upload-workers", 30,
+		"Number of goroutines to use for parallel upload")
 )
 
 // Convenience type for a bigquery row.
@@ -222,7 +221,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 
 	queryWg := sync.WaitGroup{}
 	// Create queryWorkers.
-	for w := 1; w <= nQueryWorkers; w++ {
+	for w := 1; w <= *nQueryWorkers; w++ {
 		queryWg.Add(1)
 		log.Printf("Created queryWorker with ID: %d\n", w)
 		go exporter.queryWorker(ctx, &queryWg)
@@ -231,7 +230,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	// Create uploadWorkers.
 	up := uploader.New(exporter.storageClient, exporter.bucket)
 	uploadWg := sync.WaitGroup{}
-	for w := 1; w <= nUploadWorkers; w++ {
+	for w := 1; w <= *nUploadWorkers; w++ {
 		uploadWg.Add(1)
 		go exporter.uploadWorker(ctx, &uploadWg, up)
 	}
