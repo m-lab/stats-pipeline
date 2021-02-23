@@ -45,6 +45,7 @@ steps:
   - --image=gcr.io/$PROJECT_ID/stats-pipeline:$_TAG
   - --location=$_COMPUTE_REGION
   - --cluster=$_CLUSTER
+  - --output=pipeline/
 
 - name: "gcr.io/cloud-builders/kubectl"
   id: "Create stats-pipeline service"
@@ -82,3 +83,4 @@ steps:
   - --image=gcr.io/$PROJECT_ID/maptiles:$_TAG
   - --location=$_COMPUTE_REGION
   - --cluster=$_CLUSTER
+  - --output=runner/
