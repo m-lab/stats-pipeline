@@ -1,0 +1,20 @@
+# cronjob.yaml
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: hello
+spec:
+  schedule: "0 0 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: maptiles-runner
+            image: gcr.io/{{GCLOUD_PROJECT}}/maptiles
+            args:
+            - /bin/bash
+            - run-pipeline.sh
+            env:
+              PROJECT: {{GCLOUD_PROJECT}}
+      concurrencyPolicy: Forbid

@@ -55,3 +55,30 @@ steps:
   env:
   - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
   - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
+
+- name: "gcr.io/cloud-builders/docker"
+  id: "Build the maptiles docker container"
+  args: ["build", "-t", "gcr.io/$PROJECT_ID/maptiles:$_TAG", "maptiles/Dockerfile"]
+
+- name: "gcr.io/cloud-builders/docker"
+  id: "Push the maptiles docker container to gcr.io"
+  args: ["push", "gcr.io/$PROJECT_ID/maptiles:$_TAG"]
+
+- name: "gcr.io/cloud-builders/gcloud"
+  id: "Generate manifest for the maptiles "
+  entrypoint: /bin/sh
+  args:
+  - -c
+  - |
+    sed 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
+    k8s/data-processing/jobs/maptiles-runner.yaml > \
+    maptiles-runner.yaml
+
+- name: "gcr.io/cloud-builders/gke-deploy"
+  id: "Create runner CronJob"
+  args:
+  - run
+  - --filename=maptiles-runner.yaml
+  - --image=gcr.io/$PROJECT_ID/maptiles:$_TAG
+  - --location=$_COMPUTE_REGION
+  - --cluster=$_CLUSTER
