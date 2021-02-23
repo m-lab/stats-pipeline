@@ -14,6 +14,6 @@ if ! curl -X POST "http://stats-pipeline-service:8080/v0/pipeline?year=${year}";
     exit 1
 fi
 
-echo "Stats-pipeline completed successfully, generating maptiles..."
-export GCS_BUCKET=maptiles-${PROJECT}
-make piecewise
+echo "Stats-pipeline completed successfully"
+#export GCS_BUCKET=maptiles-${PROJECT}
+#make piecewise

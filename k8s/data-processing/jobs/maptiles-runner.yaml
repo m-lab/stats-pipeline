@@ -17,5 +17,5 @@ spec:
             - run-pipeline.sh
             env:
               - name: PROJECT
-              - value: {{GCLOUD_PROJECT}}
-          concurrencyPolicy: Forbid
+                value: {{GCLOUD_PROJECT}}
+      concurrencyPolicy: Forbid
