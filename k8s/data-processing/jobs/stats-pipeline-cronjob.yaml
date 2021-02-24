@@ -2,7 +2,7 @@
 apiVersion: batch/v1beta1
 kind: CronJob
 metadata:
-  name: stats-pipeline-runner
+  name: stats-pipeline-cronjob
 spec:
   schedule: "{{PIPELINE_SCHEDULE}}"
   concurrencyPolicy: Forbid
@@ -13,7 +13,7 @@ spec:
           restartPolicy: Never
           containers:
           - name: maptiles-runner
-            image: gcr.io/{{GCLOUD_PROJECT}}/maptiles
+            image: gcr.io/{{GCLOUD_PROJECT}}/stats-pipeline-runner
             args:
             - /bin/bash
             - run-pipeline.sh

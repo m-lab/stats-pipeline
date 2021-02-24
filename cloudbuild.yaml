@@ -74,13 +74,13 @@ steps:
     sed -e 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
     -e "s/{{PIPELINE_SCHEDULE}}/${_PIPELINE_SCHEDULE}/g" \
     k8s/data-processing/jobs/stats-pipeline-runner.yaml > \
-    stats-pipeline-runner.yaml
+    stats-pipeline-cronjob.yaml
 
 - name: "gcr.io/cloud-builders/gke-deploy"
   id: "Create runner CronJob"
   args:
   - run
-  - --filename=stats-pipeline-runner.yaml
+  - --filename=stats-pipeline-cronjob.yaml
   - --image=gcr.io/$PROJECT_ID/stats-pipeline-runner:$_TAG
   - --location=$_COMPUTE_REGION
   - --cluster=$_CLUSTER
