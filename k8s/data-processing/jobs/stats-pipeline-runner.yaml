@@ -2,7 +2,7 @@
 apiVersion: batch/v1beta1
 kind: CronJob
 metadata:
-  name: maptiles-runner
+  name: stats-pipeline-runner
 spec:
   schedule: "{{PIPELINE_SCHEDULE}}"
   concurrencyPolicy: Forbid
