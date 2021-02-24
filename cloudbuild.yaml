@@ -72,7 +72,7 @@ steps:
   - -c
   - |
     sed -e 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
-    -e "s/{{PIPELINE_SCHEDULE}}/${_PIPELINE_SCHEDULE}/g" \
+    -e "s/{{PIPELINE_CRON_SCHEDULE}}/${_PIPELINE_CRON_SCHEDULE}/g" \
     k8s/data-processing/jobs/stats-pipeline-cronjob.yaml > \
     stats-pipeline-cronjob.yaml
 

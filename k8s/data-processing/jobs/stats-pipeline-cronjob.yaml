@@ -4,7 +4,7 @@ kind: CronJob
 metadata:
   name: stats-pipeline-cronjob
 spec:
-  schedule: "{{PIPELINE_SCHEDULE}}"
+  schedule: "{{PIPELINE_CRON_SCHEDULE}}"
   concurrencyPolicy: Forbid
   jobTemplate:
     spec:
