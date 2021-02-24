@@ -71,7 +71,8 @@ steps:
   args:
   - -c
   - |
-    sed 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
+    sed -e 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
+    -e "s/{{PIPELINE_SCHEDULE}}/${_PIPELINE_SCHEDULE}/g" \
     k8s/data-processing/jobs/maptiles-runner.yaml > \
     maptiles-runner.yaml
 

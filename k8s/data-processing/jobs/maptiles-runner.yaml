@@ -4,7 +4,7 @@ kind: CronJob
 metadata:
   name: maptiles-runner
 spec:
-  schedule: "0 0 * * *"
+  schedule: "{{PIPELINE_SCHEDULE}}"
   concurrencyPolicy: Forbid
   jobTemplate:
     spec:
