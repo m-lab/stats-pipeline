@@ -9,7 +9,7 @@ PROJECT=${PROJECT:?Please provide project}
 # Start stats-pipeline for the current year
 year=$(date +%Y)
 
-if ! curl -X POST "http://stats-pipeline-service:8080/v0/pipeline?year=${year}\&step=all"; then
+if ! curl -X POST "http://stats-pipeline-service:8080/v0/pipeline?year=${year}&step=all"; then
     echo "Stats-pipeline failed, please check the container logs."
     exit 1
 fi
