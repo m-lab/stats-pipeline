@@ -34,7 +34,7 @@ steps:
   - -c
   - |
     sed 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
-    k8s/data-processing/deployments/stats-pipeline.yaml > \
+    k8s/data-processing/deployments/stats-pipeline.yaml.template > \
     manifest.yaml
 
 - name: "gcr.io/cloud-builders/gke-deploy"
@@ -73,7 +73,7 @@ steps:
   - |
     sed -e 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
     -e "s/{{PIPELINE_CRON_SCHEDULE}}/${_PIPELINE_CRON_SCHEDULE}/g" \
-    k8s/data-processing/jobs/stats-pipeline-cronjob.yaml > \
+    k8s/data-processing/jobs/stats-pipeline-cronjob.yaml.template > \
     stats-pipeline-cronjob.yaml
 
 - name: "gcr.io/cloud-builders/gke-deploy"
