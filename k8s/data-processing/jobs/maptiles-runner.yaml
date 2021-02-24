@@ -10,6 +10,7 @@ spec:
     spec:
       template:
         spec:
+          restartPolicy: Never
           containers:
           - name: maptiles-runner
             image: gcr.io/{{GCLOUD_PROJECT}}/maptiles
