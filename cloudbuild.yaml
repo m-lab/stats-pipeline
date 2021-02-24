@@ -66,14 +66,14 @@ steps:
   args: ["push", "gcr.io/$PROJECT_ID/stats-pipeline-runner:$_TAG"]
 
 - name: "gcr.io/cloud-builders/gcloud"
-  id: "Generate manifest for the stats-pipeline-runner job "
+  id: "Generate manifest for the stats-pipeline-cronjob"
   entrypoint: /bin/sh
   args:
   - -c
   - |
     sed -e 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
     -e "s/{{PIPELINE_SCHEDULE}}/${_PIPELINE_SCHEDULE}/g" \
-    k8s/data-processing/jobs/stats-pipeline-runner.yaml > \
+    k8s/data-processing/jobs/stats-pipeline-cronjob.yaml > \
     stats-pipeline-cronjob.yaml
 
 - name: "gcr.io/cloud-builders/gke-deploy"
