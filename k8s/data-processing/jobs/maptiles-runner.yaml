@@ -5,6 +5,7 @@ metadata:
   name: maptiles-runner
 spec:
   schedule: "0 0 * * *"
+  concurrencyPolicy: Forbid
   jobTemplate:
     spec:
       template:
@@ -18,4 +19,3 @@ spec:
             env:
               - name: PROJECT
                 value: {{GCLOUD_PROJECT}}
-      concurrencyPolicy: Forbid
