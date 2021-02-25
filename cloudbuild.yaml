@@ -45,6 +45,8 @@ steps:
   - --image=gcr.io/$PROJECT_ID/stats-pipeline:$_DOCKER_TAG
   - --location=$_COMPUTE_REGION
   - --cluster=$_CLUSTER
+  # gke-deploy will fail if the output folder is non-empty, thus we use
+  # different folders for the two executions of this tool.
   - --output=pipeline/
 
 - name: "gcr.io/cloud-builders/kubectl"
@@ -84,4 +86,6 @@ steps:
   - --image=gcr.io/$PROJECT_ID/stats-pipeline-runner:$_DOCKER_TAG
   - --location=$_COMPUTE_REGION
   - --cluster=$_CLUSTER
+  # gke-deploy will fail if the output folder is non-empty, thus we use
+  # different folders for the two executions of this tool.
   - --output=runner/
