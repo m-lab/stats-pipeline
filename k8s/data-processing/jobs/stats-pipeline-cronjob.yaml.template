@@ -1,0 +1,24 @@
+# cronjob.yaml
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: stats-pipeline-cronjob
+spec:
+  schedule: "{{PIPELINE_CRON_SCHEDULE}}"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: maptiles-runner
+            # The exact image to be deployed is replaced by gke-deploy, this is
+            # a placeholder
+            image: gcr.io/{{GCLOUD_PROJECT}}/stats-pipeline-runner
+            args:
+            - /bin/bash
+            - run-pipeline.sh
+            env:
+              - name: PROJECT
+                value: {{GCLOUD_PROJECT}}

@@ -1,11 +1,11 @@
 steps:
 - name: "gcr.io/cloud-builders/docker"
   id: "Build the docker container"
-  args: ["build", "-t", "gcr.io/$PROJECT_ID/stats-pipeline:$_TAG", "."]
+  args: ["build", "-t", "gcr.io/$PROJECT_ID/stats-pipeline:$_DOCKER_TAG", "."]
 
 - name: "gcr.io/cloud-builders/docker"
   id: "Push the docker container to gcr.io"
-  args: ["push", "gcr.io/$PROJECT_ID/stats-pipeline:$_TAG"]
+  args: ["push", "gcr.io/$PROJECT_ID/stats-pipeline:$_DOCKER_TAG"]
 
 - name: "gcr.io/cloud-builders/kubectl"
   id: "Create configmap manifest"
@@ -34,7 +34,7 @@ steps:
   - -c
   - |
     sed 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
-    k8s/data-processing/deployments/stats-pipeline.yaml > \
+    k8s/data-processing/deployments/stats-pipeline.yaml.template > \
     manifest.yaml
 
 - name: "gcr.io/cloud-builders/gke-deploy"
@@ -42,9 +42,12 @@ steps:
   args:
   - run
   - --filename=manifest.yaml
-  - --image=gcr.io/$PROJECT_ID/stats-pipeline:$_TAG
+  - --image=gcr.io/$PROJECT_ID/stats-pipeline:$_DOCKER_TAG
   - --location=$_COMPUTE_REGION
   - --cluster=$_CLUSTER
+  # gke-deploy will fail if the output folder is non-empty, thus we use
+  # different folders for the two executions of this tool.
+  - --output=pipeline/
 
 - name: "gcr.io/cloud-builders/kubectl"
   id: "Create stats-pipeline service"
@@ -55,3 +58,34 @@ steps:
   env:
   - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
   - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
+
+- name: "gcr.io/cloud-builders/docker"
+  id: "Build the stats-pipeline-runner docker container"
+  args: ["build", "-t", "gcr.io/$PROJECT_ID/stats-pipeline-runner:$_DOCKER_TAG", "maptiles/"]
+
+- name: "gcr.io/cloud-builders/docker"
+  id: "Push the stats-pipeline-runner docker container to gcr.io"
+  args: ["push", "gcr.io/$PROJECT_ID/stats-pipeline-runner:$_DOCKER_TAG"]
+
+- name: "gcr.io/cloud-builders/gcloud"
+  id: "Generate manifest for the stats-pipeline-cronjob"
+  entrypoint: /bin/sh
+  args:
+  - -c
+  - |
+    sed -e 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
+    -e "s/{{PIPELINE_CRON_SCHEDULE}}/${_PIPELINE_CRON_SCHEDULE}/g" \
+    k8s/data-processing/jobs/stats-pipeline-cronjob.yaml.template > \
+    stats-pipeline-cronjob.yaml
+
+- name: "gcr.io/cloud-builders/gke-deploy"
+  id: "Create runner CronJob"
+  args:
+  - run
+  - --filename=stats-pipeline-cronjob.yaml
+  - --image=gcr.io/$PROJECT_ID/stats-pipeline-runner:$_DOCKER_TAG
+  - --location=$_COMPUTE_REGION
+  - --cluster=$_CLUSTER
+  # gke-deploy will fail if the output folder is non-empty, thus we use
+  # different folders for the two executions of this tool.
+  - --output=runner/
