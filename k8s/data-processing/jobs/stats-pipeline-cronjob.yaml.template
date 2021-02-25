@@ -13,6 +13,8 @@ spec:
           restartPolicy: Never
           containers:
           - name: maptiles-runner
+            # The exact image to be deployed is replaced by gke-deploy, this is
+            # a placeholder
             image: gcr.io/{{GCLOUD_PROJECT}}/stats-pipeline-runner
             args:
             - /bin/bash
