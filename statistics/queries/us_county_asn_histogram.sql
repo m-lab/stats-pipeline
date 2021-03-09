@@ -44,8 +44,8 @@ dl_per_location AS (
   FROM `measurement-lab.ndt.unified_downloads`, counties
   WHERE date BETWEEN @startdate AND @enddate
   AND client.Geo.CountryCode = "US"
-  AND client.Geo.Subdivision1ISOCode IS NOT NULL
-  AND client.Geo.Subdivision1ISOCode != ""
+  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
+  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
   AND client.Network.ASNumber IS NOT NULL
   AND ST_WITHIN(
     ST_GeogPoint(
@@ -161,8 +161,8 @@ ul_per_location AS (
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_uploads`, counties
   WHERE date BETWEEN @startdate AND @enddate
-  AND client.Geo.Subdivision1ISOCode IS NOT NULL
-  AND client.Geo.Subdivision1ISOCode != ""
+  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
+  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
   AND client.Network.ASNumber IS NOT NULL
   AND ST_WITHIN(
     ST_GeogPoint(
