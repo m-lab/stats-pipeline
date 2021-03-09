@@ -11,8 +11,11 @@ dl_per_location_cleaned AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CONCAT(client.Geo.CountryCode, '-', client.Geo.Subdivision1ISOCode) AS 
-    ISO3166_2region1,
+    CASE WHEN node._instruments IN ("tcpinfo", "web100") 
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
+    WHEN node._instruments = "ndt7"
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    END AS ISO3166_2region1,
     client.Network.ASNumber AS asn,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
@@ -23,7 +26,8 @@ dl_per_location_cleaned AS (
   AND a.MeanThroughputMbps != 0
   AND client.Geo.ContinentCode IS NOT NULL AND client.Geo.ContinentCode != ""
   AND client.Geo.CountryCode IS NOT NULL AND client.Geo.CountryCode != ""
-  AND client.Geo.Subdivision1ISOCode IS NOT NULL AND client.Geo.Subdivision1ISOCode != ""
+  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
+  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
   AND client.Network.ASNumber IS NOT NULL
   AND Client.IP IS NOT NULL
 ),
@@ -107,8 +111,11 @@ ul_per_location_cleaned AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CONCAT(client.Geo.CountryCode, '-', client.Geo.Subdivision1ISOCode) AS
-    ISO3166_2region1,
+    CASE WHEN node._instruments IN ("tcpinfo", "web100") 
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
+    WHEN node._instruments = "ndt7"
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    END AS ISO3166_2region1,
     client.Network.ASNumber AS asn,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
@@ -119,7 +126,8 @@ ul_per_location_cleaned AS (
   AND a.MeanThroughputMbps != 0
   AND client.Geo.ContinentCode IS NOT NULL AND client.Geo.ContinentCode != ""
   AND client.Geo.CountryCode IS NOT NULL AND client.Geo.CountryCode != ""
-  AND client.Geo.Subdivision1ISOCode IS NOT NULL AND client.Geo.Subdivision1ISOCode != ""
+  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
+  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
   AND client.Network.ASNumber IS NOT NULL
   AND Client.IP IS NOT NULL
 ),

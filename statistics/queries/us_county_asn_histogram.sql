@@ -30,7 +30,11 @@ dl_per_location AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode) AS state,
+    CASE WHEN node._instruments IN ("tcpinfo", "web100") 
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
+    WHEN node._instruments = "ndt7"
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    END AS state,
     client.Network.ASNumber AS asn,
     counties.GEOID AS GEOID,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
@@ -40,8 +44,8 @@ dl_per_location AS (
   FROM `measurement-lab.ndt.unified_downloads`, counties
   WHERE date BETWEEN @startdate AND @enddate
   AND client.Geo.CountryCode = "US"
-  AND client.Geo.Subdivision1ISOCode IS NOT NULL
-  AND client.Geo.Subdivision1ISOCode != ""
+  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
+  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
   AND client.Network.ASNumber IS NOT NULL
   AND ST_WITHIN(
     ST_GeogPoint(
@@ -144,7 +148,11 @@ ul_per_location AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode) AS state,
+    CASE WHEN node._instruments IN ("tcpinfo", "web100") 
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
+    WHEN node._instruments = "ndt7"
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    END AS state,
     counties.GEOID AS GEOID,
     client.Network.ASNumber AS asn,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
@@ -153,8 +161,8 @@ ul_per_location AS (
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_uploads`, counties
   WHERE date BETWEEN @startdate AND @enddate
-  AND client.Geo.Subdivision1ISOCode IS NOT NULL
-  AND client.Geo.Subdivision1ISOCode != ""
+  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
+  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
   AND client.Network.ASNumber IS NOT NULL
   AND ST_WITHIN(
     ST_GeogPoint(
