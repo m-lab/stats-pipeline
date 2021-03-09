@@ -11,8 +11,11 @@ dl_per_location_cleaned AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CONCAT(client.Geo.CountryCode, '-', client.Geo.Subdivision1ISOCode) AS 
-    ISO3166_2region1,
+    CASE WHEN node._instruments IN ("tcpinfo", "web100") 
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
+    WHEN node._instruments = "ndt7"
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    END AS ISO3166_2region1,
     client.Network.ASNumber AS asn,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
@@ -107,8 +110,11 @@ ul_per_location_cleaned AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CONCAT(client.Geo.CountryCode, '-', client.Geo.Subdivision1ISOCode) AS
-    ISO3166_2region1,
+    CASE WHEN node._instruments IN ("tcpinfo", "web100") 
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
+    WHEN node._instruments = "ndt7"
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    END AS ISO3166_2region1,
     client.Network.ASNumber AS asn,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
