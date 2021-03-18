@@ -30,10 +30,10 @@ dl_per_location AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CASE WHEN node._instruments IN ("tcpinfo", "web100") 
-      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
-    WHEN node._instruments = "ndt7"
-      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode) END AS state,
+    CASE WHEN client.Geo.Subdivision1ISOCode != "" AND client.Geo.Subdivision1ISOCode IS NOT NULL
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    ELSE CONCAT(client.Geo.CountryCode,"-",client.Geo.region) 
+    END AS state,
     counties.GEOID AS GEOID,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
@@ -44,6 +44,7 @@ dl_per_location AS (
   AND client.Geo.CountryCode = "US"
   AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
   AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
+  AND client.Network.ASNumber IS NOT NULL
   AND ST_WITHIN(
     ST_GeogPoint(
       client.Geo.Longitude,
@@ -141,10 +142,10 @@ ul_per_location AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CASE WHEN node._instruments IN ("tcpinfo", "web100") 
-      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
-    WHEN node._instruments = "ndt7"
-      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode) END AS state,
+    CASE WHEN client.Geo.Subdivision1ISOCode != "" AND client.Geo.Subdivision1ISOCode IS NOT NULL
+      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    ELSE CONCAT(client.Geo.CountryCode,"-",client.Geo.region) 
+    END AS state,
     counties.GEOID AS GEOID,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
@@ -154,6 +155,7 @@ ul_per_location AS (
   WHERE date BETWEEN @startdate AND @enddate
   AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
   AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
+  AND client.Network.ASNumber IS NOT NULL
   AND ST_WITHIN(
     ST_GeogPoint(
       client.Geo.Longitude,
@@ -245,8 +247,9 @@ ul_histogram AS (
 ),
 --Gather final result set
 results AS (
-  SELECT *, MOD(ABS(FARM_FINGERPRINT(state)), 4000) as shard FROM dl_histogram
-  JOIN ul_histogram USING (date, continent_code, country_code, state, GEOID, bucket_min, bucket_max)
+  SELECT *, MOD(ABS(FARM_FINGERPRINT(CAST(asn AS STRING))), 4000) as shard FROM dl_histogram
+  JOIN ul_histogram USING (date, continent_code, country_code, state, GEOID,
+  bucket_min, bucket_max)
   JOIN dl_stats_per_day USING (date, continent_code, country_code, state, GEOID)
   JOIN ul_stats_per_day USING (date, continent_code, country_code, state, GEOID)
   JOIN counties_noWKT USING (GEOID)
