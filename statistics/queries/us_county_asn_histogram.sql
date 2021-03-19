@@ -30,10 +30,9 @@ dl_per_location AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CASE WHEN node._instruments IN ("tcpinfo", "web100") 
-      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
-    WHEN node._instruments = "ndt7"
-      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    CASE WHEN client.Geo.Subdivision1ISOCode != "" AND client.Geo.Subdivision1ISOCode IS NOT NULL
+    THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    ELSE CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
     END AS state,
     client.Network.ASNumber AS asn,
     counties.GEOID AS GEOID,
@@ -148,10 +147,9 @@ ul_per_location AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CASE WHEN node._instruments IN ("tcpinfo", "web100") 
-      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
-    WHEN node._instruments = "ndt7"
-      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    CASE WHEN client.Geo.Subdivision1ISOCode != "" AND client.Geo.Subdivision1ISOCode IS NOT NULL
+    THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    ELSE CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
     END AS state,
     counties.GEOID AS GEOID,
     client.Network.ASNumber AS asn,

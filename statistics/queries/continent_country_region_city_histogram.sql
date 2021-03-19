@@ -11,10 +11,9 @@ dl_per_location_cleaned AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CASE WHEN node._instruments IN ("tcpinfo", "web100") 
-      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
-    WHEN node._instruments = "ndt7"
-      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    CASE WHEN client.Geo.Subdivision1ISOCode != "" AND client.Geo.Subdivision1ISOCode IS NOT NULL
+    THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    ELSE CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
     END AS ISO3166_2region1,
     client.Geo.City AS city,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
@@ -111,10 +110,9 @@ ul_per_location_cleaned AS (
     date,
     client.Geo.ContinentCode AS continent_code,
     client.Geo.CountryCode AS country_code,
-    CASE WHEN node._instruments IN ("tcpinfo", "web100") 
-      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
-    WHEN node._instruments = "ndt7"
-      THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    CASE WHEN client.Geo.Subdivision1ISOCode != "" AND client.Geo.Subdivision1ISOCode IS NOT NULL
+    THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
+    ELSE CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
     END AS ISO3166_2region1,
     client.Geo.City AS city,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
