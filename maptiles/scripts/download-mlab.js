@@ -18,7 +18,7 @@ const rootGsUrl = `gs://statistics-mlab-sandbox/v0/NA/US/${geographicLevel}`;
 let fileCount = 0;
 
 async function download(fips, i) {
-  const cmd = `gsutil cp ${rootGsUrl}/${fips}/2020/histogram_daily_stats.json mlab/${geographicLevel}/${fips}.json`;
+  const cmd = `gsutil cp ${rootGsUrl}/${fips}/2019/histogram_daily_stats.json mlab/${geographicLevel}/${fips}.json`;
   try {
     console.log(`Downloading JSON file (FIPS: ${fips}, ${i} / ${fileCount})`);
     await exec(cmd);
