@@ -26,6 +26,8 @@ tracts AS (
     CAST(geo_id AS STRING) AS GEOID,
     tract_name,
     lsad_name,
+    state_fips_code,
+    county_fips_code,
     tract_geom AS WKT
   FROM
     `bigquery-public-data.geo_census_tracts.us_census_tracts_national`
@@ -50,10 +52,7 @@ dl_per_location AS (
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_downloads`, tracts
   WHERE date BETWEEN @startdate AND @enddate
-  AND client.Geo.CountryCode = "US"
-  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
-  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
-    AND ST_WITHIN(
+  AND ST_WITHIN(
       ST_GeogPoint(
         client.Geo.Longitude,
         client.Geo.Latitude
@@ -181,10 +180,7 @@ ul_per_location AS (
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_uploads`, tracts
   WHERE date BETWEEN @startdate AND @enddate
-  AND client.Geo.CountryCode = "US"
-  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
-  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
-    AND ST_WITHIN(
+  AND ST_WITHIN(
       ST_GeogPoint(
         client.Geo.Longitude,
         client.Geo.Latitude
