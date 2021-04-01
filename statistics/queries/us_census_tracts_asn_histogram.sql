@@ -46,7 +46,7 @@ dl_per_location AS (
     tracts.state_name AS state_name,
     tracts.tract_name AS tract_name,
     tracts.lsad_name AS lsad_name,
-    client.Network.ASNumber AS ASNumber,
+    client.Network.ASNumber AS asn,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
     a.MeanThroughputMbps AS mbps,
@@ -72,7 +72,7 @@ dl_per_location_cleaned AS (
     AND state_name IS NOT NULL AND state_name != ""
     AND tract_name IS NOT NULL AND tract_name != ""
     AND lsad_name IS NOT NULL AND lsad_name != ""
-    AND ASNumber IS NOT NULL
+    AND asn IS NOT NULL
     AND ip IS NOT NULL
 ),
 --Fingerprint all cleaned tests, in an arbitrary but repeatable order
@@ -86,11 +86,11 @@ dl_fingerprinted AS (
     tract_name,
     lsad_name,
     GEOID,
-    ASNumber,
+    asn,
     ip,
     ARRAY_AGG(STRUCT(ABS(FARM_FINGERPRINT(id)) AS ffid, mbps, MinRTT) ORDER BY ABS(FARM_FINGERPRINT(id))) AS members
   FROM dl_per_location_cleaned
-  GROUP BY date, continent_code, country_code, state, state_name, tract_name,lsad_name, GEOID, ASNumber, ip
+  GROUP BY date, continent_code, country_code, state, state_name, tract_name,lsad_name, GEOID, asn, ip
 ),
 --Select two random rows for each IP using a prime number larger than the 
 --  total number of tests. random1 is used for per day/geo statistics in 
@@ -105,7 +105,7 @@ dl_random_ip_rows_perday AS (
     tract_name,
     lsad_name,
     GEOID,
-    ASNumber,
+    asn,
     ip,
     ARRAY_LENGTH(members) AS tests,
     members[SAFE_OFFSET(MOD(511232941,ARRAY_LENGTH(members)))] AS random1,
@@ -116,7 +116,7 @@ dl_random_ip_rows_perday AS (
 dl_stats_per_day AS (
   SELECT
     date, continent_code, country_code, state, state_name, tract_name, 
-    lsad_name, GEOID, ASNumber,
+    lsad_name, GEOID, asn,
     COUNT(*) AS dl_samples_day,
     ROUND(POW(10,AVG(Safe.LOG10(random1.mbps))),3) AS dl_LOG_AVG_rnd1,
     ROUND(POW(10,AVG(Safe.LOG10(random2.mbps))),3) AS dl_LOG_AVG_rnd2,
@@ -131,7 +131,7 @@ dl_stats_per_day AS (
     ROUND(APPROX_QUANTILES(random1.MinRTT, 100) [SAFE_ORDINAL(50)],3) AS download_minRTT_MED,
   FROM dl_random_ip_rows_perday
   GROUP BY date, continent_code, country_code, state,  state_name, tract_name, 
-    lsad_name, GEOID, ASNumber
+    lsad_name, GEOID, asn
 ),
 --Count the samples that fall into each bucket and get frequencies
 dl_histogram AS (
@@ -144,7 +144,7 @@ dl_histogram AS (
     tract_name,
     lsad_name,
     GEOID,
-    ASNumber,
+    asn,
     --Set the lowest bucket's min to zero, so all tests below the generated min of the lowest bin are included. 
     CASE WHEN bucket_left = 0.5623413251903491 THEN 0
     ELSE bucket_left END AS bucket_min,
@@ -161,7 +161,7 @@ dl_histogram AS (
     tract_name,
     lsad_name,
     GEOID,
-    ASNumber,
+    asn,
     bucket_min,
     bucket_max
 ),
@@ -180,7 +180,7 @@ ul_per_location AS (
     tracts.state_name AS state_name,
     tracts.tract_name AS tract_name,
     tracts.lsad_name AS lsad_name,
-    client.Network.ASNumber AS ASNumber,
+    client.Network.ASNumber AS asn,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
     a.MeanThroughputMbps AS mbps,
@@ -206,7 +206,7 @@ ul_per_location_cleaned AS (
     AND state_name IS NOT NULL AND state_name != ""
     AND tract_name IS NOT NULL AND tract_name != ""
     AND lsad_name IS NOT NULL AND lsad_name != ""
-    AND ASNumber IS NOT NULL
+    AND asn IS NOT NULL
     AND ip IS NOT NULL
 ),
 --Fingerprint all cleaned tests, in an arbitrary but repeatable order
@@ -220,11 +220,11 @@ ul_fingerprinted AS (
     tract_name,
     lsad_name,
     GEOID,
-    ASNumber,
+    asn,
     ip,
     ARRAY_AGG(STRUCT(ABS(FARM_FINGERPRINT(id)) AS ffid, mbps, MinRTT) ORDER BY ABS(FARM_FINGERPRINT(id))) AS members
   FROM ul_per_location_cleaned
-  GROUP BY date, continent_code, country_code, state, state_name, tract_name,lsad_name, GEOID, ASNumber, ip
+  GROUP BY date, continent_code, country_code, state, state_name, tract_name,lsad_name, GEOID, asn, ip
 ),
 --Select two random rows for each IP using a prime number larger than the 
 --  total number of tests. random1 is used for per day/geo statistics in 
@@ -239,7 +239,7 @@ ul_random_ip_rows_perday AS (
     tract_name,
     lsad_name,
     GEOID,
-    ASNumber,
+    asn,
     ip,
     ARRAY_LENGTH(members) AS tests,
     members[SAFE_OFFSET(MOD(511232941,ARRAY_LENGTH(members)))] AS random1,
@@ -250,7 +250,7 @@ ul_random_ip_rows_perday AS (
 ul_stats_per_day AS (
   SELECT
     date, continent_code, country_code, state, state_name, tract_name, 
-    lsad_name, GEOID, ASNumber,
+    lsad_name, GEOID, asn,
     COUNT(*) AS ul_samples_day,
     ROUND(POW(10,AVG(Safe.LOG10(random1.mbps))),3) AS ul_LOG_AVG_rnd1,
     ROUND(POW(10,AVG(Safe.LOG10(random2.mbps))),3) AS ul_LOG_AVG_rnd2,
@@ -265,7 +265,7 @@ ul_stats_per_day AS (
     ROUND(APPROX_QUANTILES(random1.MinRTT, 100) [SAFE_ORDINAL(50)],3) AS upload_minRTT_MED,
   FROM ul_random_ip_rows_perday
   GROUP BY date, continent_code, country_code, state,  state_name, tract_name, 
-    lsad_name, GEOID, ASNumber
+    lsad_name, GEOID, asn
 ),
 --Count the samples that fall into each bucket and get frequencies
 ul_histogram AS (
@@ -278,7 +278,7 @@ ul_histogram AS (
     tract_name,
     lsad_name,
     GEOID,
-    ASNumber,
+    asn,
     --Set the lowest bucket's min to zero, so all tests below the generated min of the lowest bin are included. 
     CASE WHEN bucket_left = 0.5623413251903491 THEN 0
     ELSE bucket_left END AS bucket_min,
@@ -295,7 +295,7 @@ ul_histogram AS (
     tract_name,
     lsad_name,
     GEOID,
-    ASNumber,
+    asn,
     bucket_min,
     bucket_max
 ),
@@ -303,11 +303,11 @@ ul_histogram AS (
 results AS (
   SELECT *, MOD(ABS(FARM_FINGERPRINT(GEOID)), 4000) as shard FROM dl_histogram
   JOIN ul_histogram USING (date, continent_code, country_code, state,
-  state_name, tract_name, lsad_name, GEOID, ASNumber, bucket_min, bucket_max)
+  state_name, tract_name, lsad_name, GEOID, asn, bucket_min, bucket_max)
   JOIN dl_stats_per_day USING (date, continent_code, country_code, state, 
-  state_name, tract_name, lsad_name, GEOID, ASNumber)
+  state_name, tract_name, lsad_name, GEOID, asn)
   JOIN ul_stats_per_day USING (date, continent_code, country_code, state, 
-  state_name, tract_name, lsad_name, GEOID, ASNumber)
+  state_name, tract_name, lsad_name, GEOID, asn)
 )
 --Show the results
 SELECT * FROM results
