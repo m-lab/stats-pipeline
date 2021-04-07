@@ -20,6 +20,12 @@ counties AS (
 counties_noWKT AS (
   SELECT
     county_name,
+    state_fips_code,
+    county_fips_code,
+    county_gnis_code,
+    lsad_name,
+    lsad_code,
+    fips_class_code,
     CAST(geo_id AS STRING) AS GEOID
   FROM
     `bigquery-public-data.geo_us_boundaries.counties`
@@ -41,9 +47,6 @@ dl_per_location AS (
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_downloads`, counties
   WHERE date BETWEEN @startdate AND @enddate
-  AND client.Geo.CountryCode = "US"
-  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
-  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
   AND ST_WITHIN(
     ST_GeogPoint(
       client.Geo.Longitude,
@@ -152,8 +155,6 @@ ul_per_location AS (
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_uploads`, counties
   WHERE date BETWEEN @startdate AND @enddate
-  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
-  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
   AND ST_WITHIN(
     ST_GeogPoint(
       client.Geo.Longitude,

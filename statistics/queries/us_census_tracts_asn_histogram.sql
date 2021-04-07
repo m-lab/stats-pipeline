@@ -26,6 +26,8 @@ tracts AS (
     CAST(geo_id AS STRING) AS GEOID,
     tract_name,
     lsad_name,
+    state_fips_code,
+    county_fips_code,
     tract_geom AS WKT
   FROM
     `bigquery-public-data.geo_census_tracts.us_census_tracts_national`
@@ -51,10 +53,7 @@ dl_per_location AS (
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_downloads`, tracts
   WHERE date BETWEEN @startdate AND @enddate
-  AND client.Geo.CountryCode = "US"
-  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
-  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
-    AND ST_WITHIN(
+  AND ST_WITHIN(
       ST_GeogPoint(
         client.Geo.Longitude,
         client.Geo.Latitude
@@ -178,20 +177,17 @@ ul_per_location AS (
     ELSE CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
     END AS state,
     tracts.GEOID AS GEOID,
-    client.Network.ASNumber AS asn,
     tracts.state_name AS state_name,
     tracts.tract_name AS tract_name,
     tracts.lsad_name AS lsad_name,
+    client.Network.ASNumber AS asn,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
     a.MeanThroughputMbps AS mbps,
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_uploads`, tracts
   WHERE date BETWEEN @startdate AND @enddate
-  AND client.Geo.CountryCode = "US"
-  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
-  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
-    AND ST_WITHIN(
+  AND ST_WITHIN(
       ST_GeogPoint(
         client.Geo.Longitude,
         client.Geo.Latitude
@@ -228,8 +224,7 @@ ul_fingerprinted AS (
     ip,
     ARRAY_AGG(STRUCT(ABS(FARM_FINGERPRINT(id)) AS ffid, mbps, MinRTT) ORDER BY ABS(FARM_FINGERPRINT(id))) AS members
   FROM ul_per_location_cleaned
-  GROUP BY date, continent_code, country_code, state, state_name, tract_name,
-  lsad_name, GEOID, asn, ip
+  GROUP BY date, continent_code, country_code, state, state_name, tract_name,lsad_name, GEOID, asn, ip
 ),
 --Select two random rows for each IP using a prime number larger than the 
 --  total number of tests. random1 is used for per day/geo statistics in 
@@ -306,8 +301,7 @@ ul_histogram AS (
 ),
 --Gather final result set
 results AS (
-  SELECT *, MOD(ABS(FARM_FINGERPRINT(GEOID)), 4000) as shard FROM
-  dl_histogram
+  SELECT *, MOD(ABS(FARM_FINGERPRINT(GEOID)), 4000) as shard FROM dl_histogram
   JOIN ul_histogram USING (date, continent_code, country_code, state,
   state_name, tract_name, lsad_name, GEOID, asn, bucket_min, bucket_max)
   JOIN dl_stats_per_day USING (date, continent_code, country_code, state, 

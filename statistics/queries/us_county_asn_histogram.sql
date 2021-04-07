@@ -20,6 +20,12 @@ counties AS (
 counties_noWKT AS (
   SELECT
     county_name,
+    state_fips_code,
+    county_fips_code,
+    county_gnis_code,
+    lsad_name,
+    lsad_code,
+    fips_class_code,
     CAST(geo_id AS STRING) AS GEOID
   FROM
     `bigquery-public-data.geo_us_boundaries.counties`
@@ -34,18 +40,14 @@ dl_per_location AS (
     THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
     ELSE CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
     END AS state,
-    client.Network.ASNumber AS asn,
     counties.GEOID AS GEOID,
+    client.Network.ASNumber AS asn,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
     a.MeanThroughputMbps AS mbps,
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_downloads`, counties
   WHERE date BETWEEN @startdate AND @enddate
-  AND client.Geo.CountryCode = "US"
-  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
-  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
-  AND client.Network.ASNumber IS NOT NULL
   AND ST_WITHIN(
     ST_GeogPoint(
       client.Geo.Longitude,
@@ -62,6 +64,7 @@ dl_per_location_cleaned AS (
     AND country_code IS NOT NULL AND country_code != ""
     AND state IS NOT NULL AND state != ""
     AND GEOID IS NOT NULL AND GEOID != ""
+    AND asn IS NOT NULL
     AND ip IS NOT NULL
 ),
 --Fingerprint all cleaned tests, in an arbitrary but repeatable order
@@ -159,9 +162,6 @@ ul_per_location AS (
     a.MinRTT AS MinRTT
   FROM `measurement-lab.ndt.unified_uploads`, counties
   WHERE date BETWEEN @startdate AND @enddate
-  AND (client.Geo.Subdivision1ISOCode IS NOT NULL OR client.Geo.Region IS NOT NULL)
-  AND (client.Geo.Subdivision1ISOCode != "" OR client.Geo.Region != "")
-  AND client.Network.ASNumber IS NOT NULL
   AND ST_WITHIN(
     ST_GeogPoint(
       client.Geo.Longitude,
@@ -177,6 +177,7 @@ ul_per_location_cleaned AS (
     AND country_code IS NOT NULL AND country_code != ""
     AND state IS NOT NULL AND state != ""
     AND GEOID IS NOT NULL AND GEOID != ""
+    AND asn IS NOT NULL
     AND ip IS NOT NULL
 ),
 --Fingerprint all cleaned tests, in an arbitrary but repeatable order.
@@ -257,13 +258,10 @@ ul_histogram AS (
 ),
 --Gather final result set
 results AS (
-  SELECT *, MOD(ABS(FARM_FINGERPRINT(CAST(asn AS STRING))), 4000) as shard FROM dl_histogram
-  JOIN ul_histogram USING (date, continent_code, country_code, state, GEOID,
-  asn, bucket_min, bucket_max)
-  JOIN dl_stats_per_day USING (date, continent_code, country_code, state, GEOID,
-  asn)
-  JOIN ul_stats_per_day USING (date, continent_code, country_code, state, GEOID,
-  asn)
+  SELECT *, MOD(ABS(FARM_FINGERPRINT(state)), 4000) as shard FROM dl_histogram
+  JOIN ul_histogram USING (date, continent_code, country_code, state, GEOID, asn, bucket_min, bucket_max)
+  JOIN dl_stats_per_day USING (date, continent_code, country_code, state, GEOID, asn)
+  JOIN ul_stats_per_day USING (date, continent_code, country_code, state, GEOID, asn)
   JOIN counties_noWKT USING (GEOID)
 )
 --Show the results
