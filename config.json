@@ -35,7 +35,7 @@
         "outputPath": "v0/NA/US/tracts/{{ .GEOID }}/{{ .year }}/histogram_daily_stats.json"
     },
     "states": {
-        "histogramQueryFile": "statistics/queries/us_states_territories_histogram.sql",
+        "histogramQueryFile": "statistics/queries/us_state_territories_histogram.sql",
         "exportQueryFile": "statistics/exports/us_states.sql",
         "dataset": "statistics",
         "table": "us_states",
@@ -77,7 +77,7 @@
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .city }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
     },
     "states_asn": {
-        "histogramQueryFile": "statistics/queries/us_states_territories_asn_histogram.sql",
+        "histogramQueryFile": "statistics/queries/us_state_territories_asn_histogram.sql",
         "exportQueryFile": "statistics/exports/us_states_asn.sql",
         "dataset": "statistics",
         "table": "us_states_asn",
