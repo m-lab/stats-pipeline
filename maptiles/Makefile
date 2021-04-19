@@ -59,7 +59,7 @@ census/tract-internet-acs-5.csv: check-env
 
 # dowload fcc 477 sqlite database from GCS
 fcc-477.sqlite: check-env
-	gsutil -m cp gs://${GCS_BUCKET}/fcc/201906/fcc-477.sqlite fcc-477.sqlite
+	gsutil -m cp gs://${GCS_BUCKET}/fcc/202006/fcc-477.sqlite fcc-477.sqlite
 
 # summarize 477 data by block
 fcc-block.json: fcc-477.sqlite
