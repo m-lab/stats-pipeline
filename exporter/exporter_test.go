@@ -351,41 +351,6 @@ func Test_getFieldsFromPath(t *testing.T) {
 	}
 }
 
-func Test_removeFieldsFromRow(t *testing.T) {
-	fakeRow := bqRow{
-		"test":   "foo",
-		"remove": "this",
-	}
-	tests := []struct {
-		name   string
-		row    bqRow
-		fields []string
-		want   bqRow
-	}{
-		{
-			name:   "ok-field-removed",
-			row:    fakeRow,
-			fields: []string{"remove"},
-			want: bqRow{
-				"test": "foo",
-			},
-		},
-		{
-			name:   "not-found-return-original-row",
-			row:    fakeRow,
-			fields: []string{"non-existing-field"},
-			want:   fakeRow,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := removeFieldsFromRow(tt.row, tt.fields); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("removeFieldsFromRow() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 // TestPrometheusMetrics ensures that all the metrics pass the linter.
 func TestPrometheusMetrics(t *testing.T) {
 	bytesProcessedMetric.WithLabelValues("x")
