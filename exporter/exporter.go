@@ -352,9 +352,9 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 			}
 		}
 		// We are in the middle or start of a file, so just append the current
-		// row to currentFile. Fields that appear in the output path are
-		// removed to avoid redundancy in the JSON and create smaller files.
-		currentFile = append(currentFile, currentRow)
+		// row to currentFile. The partitionField is removed from the output.
+		currentFile = append(currentFile, removeFieldsFromRow(currentRow,
+			[]string{partitionField}))
 		// Save relevant fields for comparison in the next iteration.
 		// Note: we can't just do lastRow = currentRow here as it would be a
 		// reference; we need to copy.
@@ -515,6 +515,25 @@ func getFieldsFromPath(path string) ([]string, error) {
 		fields = append(fields, m[1])
 	}
 	return fields, nil
+}
+
+// removeFieldsFromRow returns a new BQ row without the specified fields. It
+// also removes the partitioning field if present.
+func removeFieldsFromRow(row bqRow, fields []string) bqRow {
+	newRow := bqRow{}
+	fields = append(fields, partitionField)
+	for fieldName, fieldValue := range row {
+		found := false
+		for _, k := range fields {
+			if fieldName == k {
+				found = true
+			}
+		}
+		if !found {
+			newRow[fieldName] = fieldValue
+		}
+	}
+	return newRow
 }
 
 // resetMetrics sets all the metrics for a given table to zero.
