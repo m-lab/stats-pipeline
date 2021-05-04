@@ -3,11 +3,13 @@ package exporter
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"reflect"
 	"strings"
 	"testing"
+	"text/template"
 	"time"
 
 	"cloud.google.com/go/bigquery"
@@ -113,6 +115,10 @@ type mockRowIterator struct {
 	index   int
 }
 
+func (it *mockRowIterator) PageInfo() *iterator.PageInfo {
+	return &iterator.PageInfo{}
+}
+
 func (it *mockRowIterator) Next(dst interface{}) error {
 	// Check config for an error.
 	if it.iterErr != nil {
@@ -146,107 +152,6 @@ func TestNew(t *testing.T) {
 		t.Errorf("New() didn't return the expected exporter instance")
 	}
 }
-
-// func TestJSONExporter_Export(t *testing.T) {
-// 	const selectQuery = "SELECT * FROM test"
-
-// 	// Create an iterator returning a fake row.
-// 	it := &mockRowIterator{
-// 		rows: []map[string]bigquery.Value{
-// 			{
-// 				"date":  "2020-01-01",
-// 				"field": "test",
-// 				"year":  2020,
-// 				"histograms": []map[string]bigquery.Value{
-// 					{"bucket_min": "0"},
-// 				},
-// 			},
-// 		},
-// 	}
-// 	// Queries run via this BQ client always return the fake iterator created
-// 	// above.
-// 	bq := &mockClient{
-// 		iterator: it,
-// 	}
-// 	// A fake GCS client and bucket to export data to.
-// 	gcs := &gcsfake.GCSClient{}
-// 	fakeBucket := gcsfake.NewBucketHandle()
-// 	gcs.AddTestBucket("test", fakeBucket)
-
-// 	outputPathTpl := template.Must(template.New("outputPathTpl").
-// 		Parse("v0/{{ .field }}/{{ .year }}/histogram_daily_stats.json"))
-
-// 	gen := New(bq, gcs, "test")
-// 	err := gen.Export(context.Background(), selectQuery, outputPathTpl)
-// 	if err != nil {
-// 		t.Fatalf("Export() returned an error: %v", err)
-// 	}
-// 	reader, err := fakeBucket.Object(
-// 		"v0/test/2020/histogram_daily_stats.json").NewReader(
-// 		context.Background())
-// 	content, err := ioutil.ReadAll(reader)
-// 	testingx.Must(t, err, "cannot read from GCS object")
-// 	if string(content) != `[{"bucket_min":"0"}]` {
-// 		t.Errorf("Export() wrote unexpected data on GCS: %v", string(content))
-// 	}
-// 	if len(bq.queries) != 1 || bq.queries[0] != "SELECT * FROM test" {
-// 		t.Errorf("Export() did not run the expected queries: %v", bq.queries)
-// 	}
-// 	it.Reset()
-// 	// Make the iterator return an error.
-// 	it.iterErr = errors.New("iterator error")
-// 	err = gen.Export(context.Background(), selectQuery, outputPathTpl)
-// 	if !errors.Is(err, it.iterErr) {
-// 		t.Errorf("Export() didn't return the expected error: %v", err)
-// 	}
-// 	it.iterErr = nil
-// 	// Replace client with one whose queries always fail.
-// 	gen.bqClient = &mockClient{
-// 		queryReadMustFail: true,
-// 	}
-// 	err = gen.Export(context.Background(), selectQuery, outputPathTpl)
-// 	if err == nil || !strings.Contains(err.Error(), "Read() failed") {
-// 		t.Errorf("Export() didn't return the expected error: %v", err)
-// 	}
-// 	gen.bqClient = bq
-// 	// Feed json.Marshal a row that cannot be marshalled.
-// 	// Note: this is not something that can really happen when data comes
-// 	// from BigQuery, I think.
-// 	badDataIt := &mockRowIterator{
-// 		rows: []map[string]bigquery.Value{
-// 			{
-// 				"date":  "2020-01-01",
-// 				"field": "test",
-// 				"year":  2020,
-// 				"histograms": []map[string]bigquery.Value{
-// 					{"this-will-fail": make(chan int)},
-// 				},
-// 			},
-// 		},
-// 	}
-// 	bq.iterator = badDataIt
-// 	err = gen.Export(context.Background(), selectQuery, outputPathTpl)
-// 	if !strings.Contains(err.Error(), "unsupported type") {
-// 		t.Errorf("Export() didn't return the expected error: %v", err)
-// 	}
-// 	bq.iterator = it
-// 	// Bad output template.
-// 	failingOutputPathTpl := template.Must(template.New("fail").Parse("{{nil}}"))
-// 	err = gen.Export(context.Background(), selectQuery, failingOutputPathTpl)
-// 	if err == nil || !strings.Contains(err.Error(), "not a command") {
-// 		t.Errorf("Export() didn't return the expected error: %v", err)
-// 	}
-// 	it.Reset()
-// 	// Make writes to the output path fail.
-// 	fakeBucket.Object(
-// 		"v0/test/2020/histogram_daily_stats.json").(*gcsfake.ObjectHandle).
-// 		WritesMustFail = true
-// 	err = gen.Export(context.Background(), selectQuery, outputPathTpl)
-// 	if err == nil || !strings.Contains(err.Error(), "write failed") {
-// 		t.Errorf("Export() didn't return the expected error: %v", err)
-
-// 	}
-// }
 
 func TestJSONExporter_marshalAndUpload(t *testing.T) {
 	jobs := make(chan *UploadJob)
@@ -397,4 +302,51 @@ func TestPrometheusMetrics(t *testing.T) {
 	uploadQueueSizeHistogram.WithLabelValues("x")
 
 	promtest.LintMetrics(t)
+}
+
+func TestJSONExporter_processQueryResults(t *testing.T) {
+	exporter := &JSONExporter{
+		uploadJobs: make(chan *UploadJob),
+	}
+	// Create an iterator returning a fake row.
+	it := &mockRowIterator{
+		rows: []map[string]bigquery.Value{
+			{
+				"date":  "2020-01-01",
+				"year":  2020,
+				"shard": int64(1),
+			},
+		},
+	}
+	outputPathTpl := template.Must(template.New("path").Parse(
+		"{{.year}}/output.json",
+	))
+	qJob := &QueryJob{
+		name:       "test",
+		query:      "SELECT * FROM test_table",
+		fields:     []string{"year"},
+		outputPath: outputPathTpl,
+	}
+	go exporter.processQueryResults(it, qJob)
+	// Read the job sent on the uploadJobs channel and check its content.
+	ul := <-exporter.uploadJobs
+	var rows []map[string]json.RawMessage
+	err := json.Unmarshal(ul.content, &rows)
+	if err != nil {
+		t.Errorf("Cannot unmarshal JSON: %v", err)
+	}
+
+	if len(rows) == 0 {
+		t.Errorf("Output JSON is empty")
+	}
+	row := rows[0]
+	if _, ok := row["shard"]; ok {
+		t.Errorf("the 'shard' field has not been removed from the output")
+	}
+	if string(row["date"]) != `"2020-01-01"` {
+		t.Errorf("wrong value for the date field: %v", string(row["date"]))
+	}
+	if string(row["year"]) != `2020` {
+		t.Errorf("wrong value for the year field: %v", string(row["year"]))
+	}
 }
