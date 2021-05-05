@@ -115,6 +115,10 @@ type mockRowIterator struct {
 	index   int
 }
 
+func (it *mockRowIterator) PageInfo() *iterator.PageInfo {
+	return &iterator.PageInfo{}
+}
+
 func (it *mockRowIterator) Next(dst interface{}) error {
 	// Check config for an error.
 	if it.iterErr != nil {
