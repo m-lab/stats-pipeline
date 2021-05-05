@@ -352,9 +352,9 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 			}
 		}
 		// We are in the middle or start of a file, so just append the current
-		// row to currentFile. Fields that appear in the output path are
-		// removed to avoid redundancy in the JSON and create smaller files.
-		currentFile = append(currentFile, removeFieldsFromRow(currentRow, j.fields))
+		// row to currentFile. The partitionField is removed from the output.
+		currentFile = append(currentFile, removeFieldsFromRow(currentRow,
+			[]string{}))
 		// Save relevant fields for comparison in the next iteration.
 		// Note: we can't just do lastRow = currentRow here as it would be a
 		// reference; we need to copy.
