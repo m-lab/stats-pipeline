@@ -337,7 +337,7 @@ func TestJSONExporter_processQueryResults(t *testing.T) {
 	}
 
 	if len(rows) == 0 {
-		t.Errorf("Output JSON is empty")
+		t.Fatal("Output JSON is empty")
 	}
 	row := rows[0]
 	if _, ok := row["shard"]; ok {
