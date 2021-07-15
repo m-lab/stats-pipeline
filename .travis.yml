@@ -1,5 +1,8 @@
 language: go
 
+go:
+ - "1.15.8"
+
 install:
 - go get -v -t ./...
 
