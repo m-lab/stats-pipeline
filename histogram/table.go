@@ -76,8 +76,7 @@ func (t *Table) deleteRows(ctx context.Context, start, end time.Time) error {
 		// This can happen if, for example, the table hasn't been created yet.
 		log.Printf("Warning: cannot remove previous rows (%v)", err)
 	}
-
-	return nil
+	return err
 }
 
 // UpdateHistogram generates the histogram data for the specified time range.
