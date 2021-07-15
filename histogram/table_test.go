@@ -64,6 +64,10 @@ func (t *mockTable) TableID() string {
 	return t.name
 }
 
+func (t *mockTable) FullyQualifiedName() string {
+	return t.name
+}
+
 // ********** mockQuery **********
 type mockQuery struct {
 	bqiface.Query
@@ -113,6 +117,9 @@ func (j *mockJob) Wait(context.Context) (*bigquery.JobStatus, error) {
 	}
 	return &bigquery.JobStatus{
 		State: bigquery.Done,
+		Statistics: &bigquery.JobStatistics{
+			TotalBytesProcessed: 10,
+		},
 	}, nil
 }
 
