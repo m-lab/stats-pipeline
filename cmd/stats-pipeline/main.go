@@ -46,6 +46,7 @@ func init() {
 	flag.StringVar(&bucket, "bucket", "statistics-mlab-sandbox",
 		"GCS bucket to export the result to")
 	flag.Var(&configFile, "config", "JSON configuration file")
+	flag.Var(&outputType, "output", "Output to gcs or local files.")
 }
 
 func makeHTTPServer(listenAddr string, h http.Handler) *http.Server {
