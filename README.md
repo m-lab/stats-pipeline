@@ -1,3 +1,5 @@
+[![Version](https://img.shields.io/github/tag/m-lab/stats-pipeline.svg)](https://github.com/m-lab/stats-pipeline/releases) [![Build Status](https://travis-ci.com/m-lab/stats-pipeline.svg?branch=master)](https://travis-ci.com/m-lab/stats-pipeline) [![Coverage Status](https://coveralls.io/repos/github/m-lab/stats-pipeline/badge.svg?branch=master)](https://coveralls.io/github/m-lab/stats-pipeline?branch=master) [![GoDoc](https://godoc.org/github.com/m-lab/stats-pipeline?status.svg)](https://godoc.org/github.com/m-lab/stats-pipeline) [![Go Report Card](https://goreportcard.com/badge/github.com/m-lab/stats-pipeline)](https://goreportcard.com/report/github.com/m-lab/stats-pipeline)
+
 # Statistics Pipeline Service
 This repository contains code that processes NDT data and provides aggregate
 metrics by day for standard global, and some national geographies. The resulting
