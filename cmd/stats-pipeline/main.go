@@ -8,12 +8,11 @@ import (
 	"net/http"
 	"runtime"
 
-	"github.com/m-lab/stats-pipeline/output"
-
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/storage"
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
 	"github.com/googleapis/google-cloud-go-testing/storage/stiface"
+
 	"github.com/m-lab/go/flagx"
 	"github.com/m-lab/go/httpx"
 	"github.com/m-lab/go/prometheusx"
@@ -21,6 +20,7 @@ import (
 	"github.com/m-lab/go/uploader"
 	"github.com/m-lab/stats-pipeline/config"
 	"github.com/m-lab/stats-pipeline/exporter"
+	"github.com/m-lab/stats-pipeline/output"
 	"github.com/m-lab/stats-pipeline/pipeline"
 )
 
