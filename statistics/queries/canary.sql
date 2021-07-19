@@ -210,15 +210,10 @@ SELECT
   test_date, TestTime, metro, site, machine,
   clientIP, uuid, #id AS uuid, #uuid
   CongestionControl AS cc,  #TODO
-  #result.Control.MessageProtocol AS protocol,
   MeanThroughputMbps AS mbps, 
   #raw.Download[x].TCPInfo.Retransmits,  # empty/NULL
   MinRTT,       # empty/NULL
-  #result.S2C.MinRTT AS appMinRTT,
-  #result.S2C.SumRTT, result.S2C.CountRTT,  # empty/NULL
-  #result.S2C.MaxRTT AS appMaxRTT,          # empty/NULL
-  duration, #  TIMESTAMP_DIFF(result.S2C.EndTime, result.S2C.StartTime, MICROSECOND)/1000000 AS test_duration,
-  #result.S2C.Error != "" AS error,
+  duration,
   MeanThroughputMbps <= 0.1 AS slow,
   duration BETWEEN 9 AND 13 AS complete,
 FROM primary 
@@ -235,10 +230,12 @@ FROM downloads D JOIN good_clients G ON D.clientIP = G.client AND D.metro = G.me
 stats AS (
 SELECT test_date, metro, site, machine, complete, slow, count(uuid) AS tests, 
 ROUND(EXP(AVG(IF(mbps > 0, LN(mbps), NULL))),2) AS log_mean_speed, 
-ROUND(SAFE_DIVIDE(COUNTIF(MinRTT < 10000000), COUNT(uuid)),3) AS rttUnder10,  # Using MinRTT instead of appMinRTT here and below
-ROUND(APPROX_QUANTILES(MinRTT, 101)[OFFSET(50)]/1000000,3) AS medianMinRTT,
-ROUND(AVG(MinRTT)/1000000,3) AS meanMinRTT,
-ROUND(EXP(AVG(IF(MinRTT > 0, LN(MinRTT/1000000), 0))),3) AS logMeanMinRTT,
+# ndt7 has only TCPINFO MinRTT, and reports in microseconds??  Using MinRTT instead of appMinRTT here and below
+# ndt5 was reporting in nanoseconds??
+ROUND(SAFE_DIVIDE(COUNTIF(MinRTT < 10), COUNT(uuid)),3) AS rttUnder10msec, 
+ROUND(APPROX_QUANTILES(MinRTT, 101)[OFFSET(50)],3) AS medianMinRTT,
+ROUND(AVG(IF(MinRTT<10000,MinRTT,NULL)),3) AS meanMinRTT, # Ignore insane values over 10 seconds
+ROUND(EXP(AVG(IF(MinRTT > 0, LN(MinRTT), 0))),3) AS logMeanMinRTT,
 # AVG(Retransmits) AS avgRetransmits,
 # Pearson correlation between ln(minRTT) and ln(bandwidth).  Ln produces much higher correlation (.5 vs .3)
 # suggesting that the long tail of high speed / low RTT undermines the correlation without the LOG.
@@ -257,8 +254,8 @@ ROUND(SAFE_DIVIDE(COUNTIF(mbps BETWEEN 10 AND 30), COUNT(uuid)),3) AS _10_30,
 ROUND(SAFE_DIVIDE(COUNTIF(mbps BETWEEN 30 AND 100), COUNT(uuid)),3) AS _30_100,
 ROUND(SAFE_DIVIDE(COUNTIF(mbps BETWEEN 100 AND 300), COUNT(uuid)),3) AS _100_300,
 ROUND(SAFE_DIVIDE(COUNTIF(mbps > 300), COUNT(uuid)),3) AS over_300,
-COUNTIF(MinRTT > 50000000) AS far,
-ROUND(EXP(AVG(IF(MinRTT > 50000000 AND mbps > 0, LN(mbps), NULL))),3) AS logMeanFarMbps,
+COUNTIF(MinRTT > 50) AS far,
+ROUND(EXP(AVG(IF(MinRTT > 50 AND mbps > 0, LN(mbps), NULL))),3) AS logMeanFarMbps,
 FROM good_downloads
 GROUP BY metro, test_date, machine, site, complete, slow
 )
