@@ -16,8 +16,6 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
-	"github.com/googleapis/google-cloud-go-testing/storage/stiface"
-	"github.com/m-lab/go/uploader"
 	"github.com/m-lab/stats-pipeline/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -96,13 +94,16 @@ var (
 // Convenience type for a bigquery row.
 type bqRow = map[string]bigquery.Value
 
+// Writer defines the interface for saving files to GCS or locally.
+type Writer interface {
+	Write(ctx context.Context, path string, content []byte) error
+}
+
 // JSONExporter is a JSON exporter for histogram data on BigQuery.
 type JSONExporter struct {
-	bqClient      bqiface.Client
-	storageClient stiface.Client
-
-	bucket    string
+	bqClient  bqiface.Client
 	projectID string
+	output    Writer
 
 	queryJobs  chan *QueryJob
 	uploadJobs chan *UploadJob
@@ -135,16 +136,15 @@ type QueryJob struct {
 }
 
 // New creates a new JSONExporter.
-func New(bqClient bqiface.Client, storageClient stiface.Client, projectID,
-	bucket string) *JSONExporter {
+func New(bqClient bqiface.Client, projectID string, output Writer) *JSONExporter {
 	return &JSONExporter{
-		bqClient:      bqClient,
-		storageClient: storageClient,
-		projectID:     projectID,
-		bucket:        bucket,
-		queryJobs:     make(chan *QueryJob),
-		uploadJobs:    make(chan *UploadJob),
-		results:       make(chan UploadResult),
+		bqClient:  bqClient,
+		projectID: projectID,
+		output:    output,
+
+		queryJobs:  make(chan *QueryJob),
+		uploadJobs: make(chan *UploadJob),
+		results:    make(chan UploadResult),
 	}
 }
 
@@ -228,11 +228,10 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	}
 
 	// Create uploadWorkers.
-	up := uploader.New(exporter.storageClient, exporter.bucket)
 	uploadWg := sync.WaitGroup{}
 	for w := 1; w <= *nUploadWorkers; w++ {
 		uploadWg.Add(1)
-		go exporter.uploadWorker(ctx, &uploadWg, up)
+		go exporter.uploadWorker(ctx, &uploadWg)
 	}
 
 	for _, v := range clauses {
@@ -395,8 +394,7 @@ func (exporter *JSONExporter) uploadFile(j *QueryJob, rows []bqRow, lastRow bqRo
 }
 
 // uploadWorker receives UploadJobs from the channel and uploads files to GCS.
-func (exporter *JSONExporter) uploadWorker(ctx context.Context,
-	wg *sync.WaitGroup, up *uploader.Uploader) {
+func (exporter *JSONExporter) uploadWorker(ctx context.Context, wg *sync.WaitGroup) {
 
 	// Make sure we decrement the waitgroup's counter before returning.
 	defer wg.Done()
@@ -413,7 +411,7 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context,
 		atomic.AddInt32(&exporter.inflightUploads, 1)
 		inFlightUploadsHistogram.WithLabelValues(j.table).Observe(float64(
 			atomic.LoadInt32(&exporter.inflightUploads)))
-		_, err := up.Upload(ctx, j.objName, j.content)
+		err := exporter.output.Write(ctx, j.objName, j.content)
 		atomic.AddInt32(&exporter.inflightUploads, -1)
 
 		uploadedBytesMetric.WithLabelValues(j.table).Add(float64(len(j.content)))

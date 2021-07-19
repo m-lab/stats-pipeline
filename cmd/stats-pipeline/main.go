@@ -12,12 +12,15 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
 	"github.com/googleapis/google-cloud-go-testing/storage/stiface"
+
 	"github.com/m-lab/go/flagx"
 	"github.com/m-lab/go/httpx"
 	"github.com/m-lab/go/prometheusx"
 	"github.com/m-lab/go/rtx"
+	"github.com/m-lab/go/uploader"
 	"github.com/m-lab/stats-pipeline/config"
 	"github.com/m-lab/stats-pipeline/exporter"
+	"github.com/m-lab/stats-pipeline/output"
 	"github.com/m-lab/stats-pipeline/pipeline"
 )
 
@@ -27,6 +30,10 @@ var (
 	project    string
 	listenAddr string
 	bucket     string
+	outputType = flagx.Enum{
+		Options: []string{"gcs", "local"},
+		Value:   "gcs",
+	}
 
 	configFile = flagx.File{}
 	mainCtx    = context.Background()
@@ -39,6 +46,7 @@ func init() {
 	flag.StringVar(&bucket, "bucket", "statistics-mlab-sandbox",
 		"GCS bucket to export the result to")
 	flag.Var(&configFile, "config", "JSON configuration file")
+	flag.Var(&outputType, "output", "Output to gcs or local files.")
 }
 
 func makeHTTPServer(listenAddr string, h http.Handler) *http.Server {
@@ -64,8 +72,14 @@ func main() {
 	gcsClient, err := storage.NewClient(mainCtx)
 	rtx.Must(err, "error initializing GCS client")
 
-	exporter := exporter.New(bqiface.AdaptClient(bqClient),
-		stiface.AdaptClient(gcsClient), project, bucket)
+	var wr exporter.Writer
+	switch outputType.Value {
+	case "gcs":
+		wr = output.NewGCSWriter(uploader.New(stiface.AdaptClient(gcsClient), bucket))
+	case "local":
+		wr = output.NewLocalWriter(bucket)
+	}
+	exporter := exporter.New(bqiface.AdaptClient(bqClient), project, wr)
 
 	// Initialize handlers.
 	pipelineHandler := pipeline.NewHandler(bqiface.AdaptClient(bqClient),

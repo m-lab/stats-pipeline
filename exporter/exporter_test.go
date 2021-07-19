@@ -12,12 +12,15 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/m-lab/stats-pipeline/output"
+
 	"cloud.google.com/go/bigquery"
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
 	"github.com/m-lab/go/cloudtest/bqfake"
 	"github.com/m-lab/go/cloudtest/gcsfake"
 	"github.com/m-lab/go/prometheusx/promtest"
 	"github.com/m-lab/go/testingx"
+	"github.com/m-lab/go/uploader"
 	"google.golang.org/api/iterator"
 )
 
@@ -142,13 +145,13 @@ func TestNew(t *testing.T) {
 	bq, err := bqfake.NewClient(context.Background(), "test")
 	testingx.Must(t, err, "cannot init bq client")
 	gcs := &gcsfake.GCSClient{}
-	exporter := New(bq, gcs, "project", "test-bucket")
+	wr := output.NewGCSWriter(uploader.New(gcs, "test-bucket"))
+	exporter := New(bq, "project", wr)
 	if exporter == nil {
 		t.Fatalf("New() returned nil.")
 	}
-	if exporter.bqClient != bq || exporter.storageClient != gcs ||
-		exporter.projectID != "project" ||
-		exporter.bucket != "test-bucket" {
+	if exporter.bqClient != bq || exporter.output != wr ||
+		exporter.projectID != "project" {
 		t.Errorf("New() didn't return the expected exporter instance")
 	}
 }
@@ -204,7 +207,8 @@ func Test_printStats(t *testing.T) {
 	bq, err := bqfake.NewClient(context.Background(), "test")
 	testingx.Must(t, err, "cannot init bq client")
 	gcs := &gcsfake.GCSClient{}
-	exporter := New(bq, gcs, "project", "test-bucket")
+	wr := output.NewGCSWriter(uploader.New(gcs, "test-bucket"))
+	exporter := New(bq, "project", wr)
 
 	go exporter.printStats(ctx, 1)
 	// Send a successful upload and an error, then check the output after a
