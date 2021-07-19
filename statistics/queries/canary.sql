@@ -66,23 +66,27 @@ WHERE duration BETWEEN 9 and 13
 
 machine_summary AS (
 SELECT 
-  tests.* EXCEPT(TestTime, uuid),
+  tests_per_client.* EXCEPT(TestTime, uuid),
   --test_date, metro, site, machine, client, 
   COUNT(DISTINCT uuid) AS tests,
-  machines.* EXCEPT(metro, site, machine, test_date, tests) 
-FROM tests_per_client tests LEFT JOIN hours_per_day_per_machine machines
-ON (tests.metro = machines.metro AND tests.site = machines.site AND tests.machine = machines.machine AND tests.test_date = machines.test_date)
+  machine_hours.* EXCEPT(metro, site, machine, test_date, tests) 
+FROM tests_per_client LEFT JOIN hours_per_day_per_machine machine_hours
+ON (tests_per_client.metro = machine_hours.metro AND 
+    tests_per_client.site = machine_hours.site AND 
+    tests_per_client.machine = machine_hours.machine AND 
+    tests_per_client.test_date = machine_hours.test_date)
 GROUP BY metro, site, machine, client, test_date, hours 
 ), 
 
 # This will be very expensive. 
 # This should create a lot of empty rows, for clients that appear in metro, but not on a machine. 
 with_hours AS ( 
-SELECT a.*, b.* EXCEPT(test_date, metro, machines) 
-FROM good_machines_per_metro b LEFT JOIN machine_summary a 
-ON (a.metro = b.metro AND a.test_date = b.test_date) 
+SELECT machine_summary.*, good_machines_per_metro.* EXCEPT(test_date, metro, machines) 
+FROM good_machines_per_metro LEFT JOIN machine_summary 
+ON (machine_summary.metro = good_machines_per_metro.metro AND machine_summary.test_date = good_machines_per_metro.test_date) 
 ),
 
+# Not clear if this is actually useful as aggregate.
 metro_summary AS (
 SELECT 
   CURRENT_DATE() AS update_time, test_date, metro, client, 
@@ -98,46 +102,46 @@ GROUP BY metro, client, test_date, good_hours, metro_hours, good_machines, metro
 # CROSS JOIN produces about 150M rows.
 
 # flatten the per metro data, so that we have a row for each machine/client/date
-flatten AS (
+metro_machine_summary AS (
 SELECT test_date, metro, client, CONCAT(site, ".", machine) AS machine, tests
 FROM metro_summary JOIN UNNEST(metro_summary.machines)
 GROUP BY test_date, metro, client, site, machine, tests
 ),
 
-# extract complete list of machines per metro/date
-machines AS (
+# extract complete list of machine per metro/date
+machine_hours AS (
 SELECT test_date, metro, machine
-FROM flatten
+FROM metro_machine_summary
 GROUP BY test_date, metro, machine
 ),
 
 # extract complete list of clients per metro/date
 clients AS (
 SELECT test_date, metro, client
-FROM flatten
+FROM metro_machine_summary
 WHERE client != ""
 GROUP BY test_date, metro, client
 ),
 
 # create a complete list of machine/client pairs per metro/date
 # This is quite large - about 100M pairs worldwide for a one week window.
-product AS (
-SELECT machines.test_date, machines.metro, machines.machine, clients.client
-FROM machines CROSS JOIN clients
-WHERE machines.metro = clients.metro AND machines.test_date = clients.test_date
+machine_clients AS (
+SELECT machine_hours.test_date, machine_hours.metro, machine_hours.machine, clients.client
+FROM machine_hours CROSS JOIN clients
+WHERE machine_hours.metro = clients.metro AND machine_hours.test_date = clients.test_date
 ),
 
-# Now join the machine/client pairs with the original flattened data.
+# Now join the machine/client pairs with the original metro_machine_summaryed data.
 # This produces a full complement of rows for each client/metro/date.
 joined AS (
-SELECT product.test_date, product.metro, product.machine, product.client, IF(flatten.tests IS NULL, 0, flatten.tests) AS tests
-FROM product LEFT JOIN flatten ON  product.test_date = flatten.test_date AND product.metro = flatten.metro AND product.client = flatten.client AND product.machine = flatten.machine
+SELECT machine_clients.test_date, machine_clients.metro, machine_clients.machine, machine_clients.client, IF(metro_machine_summary.tests IS NULL, 0, metro_machine_summary.tests) AS tests
+FROM machine_clients LEFT JOIN metro_machine_summary ON  machine_clients.test_date = metro_machine_summary.test_date AND machine_clients.metro = metro_machine_summary.metro AND machine_clients.client = metro_machine_summary.client AND machine_clients.machine = metro_machine_summary.machine
 ),
 
 ---------------------------------------------------------
 
-# Now aggregate over the past week, to produce a complete distribution of tests
-# per client across all machines in each metro.
+# Now aggregate over the past week, to produce machine_summary complete distribution of tests
+# per client across all machine_hours in each metro.
 past_week AS (
 SELECT
   test_date AS date, metro, machine, client,
@@ -156,7 +160,8 @@ weekly_summary AS (
 SELECT
   date, metro, client,
   COUNTIF(weekly_tests > 0) AS test_machines,
-  COUNT(machine) AS machines,
+  COUNT(machine) AS machines
+,
   SUM(weekly_tests) total_tests, 
   MIN(min_date) AS min_date,
   # These count the number of machines with 0,1,2,3 or more tests
@@ -182,8 +187,8 @@ GROUP BY date, metro, client
 
 
 # Ideally, this should be based on binomial distribution likelihood.
-# However, for now Im using a simpler criteria that is sub-optimal.
-# This could also be a sliding window partition if we want to compute multiple dates.
+# However, for now Im using machine_summary simpler criteria that is sub-optimal.
+# This could also be machine_summary sliding window partition if we want to compute multiple dates.
 good_clients AS (
 SELECT * FROM weekly_summary # mlab-sandbox.gfr.client_weekly_stats
 WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 8 DAY)
@@ -194,11 +199,6 @@ AND client NOT IN
 --AND total_tests < 2*machines
 # Good clients will have similar counts across all machines
 AND max <= min + SQRT(machines)  -- up to 3 machines -> max = 1, 4 machines -> max = 2, ALL 15 machines -> spread < 4
---AND max <= 3
---AND test_machines = machines
---AND total_tests > 25
---AND zeros = 0 AND ones = 0 AND twos=0
---AND max <= min + 2
 # If there are fewer tests than machines, we expect lots of singletons
 --AND (total_tests > machines OR ones >= twos)
 ORDER BY machines DESC, metro
@@ -236,9 +236,9 @@ stats AS (
 SELECT test_date, metro, site, machine, complete, slow, count(uuid) AS tests, 
 ROUND(EXP(AVG(IF(mbps > 0, LN(mbps), NULL))),2) AS log_mean_speed, 
 ROUND(SAFE_DIVIDE(COUNTIF(MinRTT < 10000000), COUNT(uuid)),3) AS rttUnder10,  # Using MinRTT instead of appMinRTT here and below
-ROUND(APPROX_QUANTILES(MinRTT, 101)[OFFSET(50)]/1000000,2) AS medianMinRTT,
-ROUND(AVG(MinRTT)/1000000,2) AS meanMinRTT,
-ROUND(EXP(AVG(IF(MinRTT > 0, LN(MinRTT/1000000), 0))),2) AS logMeanMinRTT,
+ROUND(APPROX_QUANTILES(MinRTT, 101)[OFFSET(50)]/1000000,3) AS medianMinRTT,
+ROUND(AVG(MinRTT)/1000000,3) AS meanMinRTT,
+ROUND(EXP(AVG(IF(MinRTT > 0, LN(MinRTT/1000000), 0))),3) AS logMeanMinRTT,
 # AVG(Retransmits) AS avgRetransmits,
 # Pearson correlation between ln(minRTT) and ln(bandwidth).  Ln produces much higher correlation (.5 vs .3)
 # suggesting that the long tail of high speed / low RTT undermines the correlation without the LOG.
@@ -264,4 +264,4 @@ GROUP BY metro, test_date, machine, site, complete, slow
 )
 
 SELECT * FROM stats
--- ORDER BY complete DESC, slow, test_date, site, machine 
+
