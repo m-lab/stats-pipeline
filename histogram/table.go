@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log"
+	"net/http"
 	"text/template"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"google.golang.org/api/googleapi"
 )
 
 var (
@@ -69,15 +71,20 @@ func (t *Table) deleteRows(ctx context.Context, start, end time.Time) error {
 	if err != nil {
 		return err
 	}
+	// Check that table exists.
+	_, err = t.client.Dataset(t.DatasetID()).Table(t.TableID()).Metadata(ctx)
+	if e, ok := err.(*googleapi.Error); ok && e.Code == http.StatusNotFound {
+		// deleting rows from a table that does not exist is a no-op. So, return
+		// without error.
+		return nil
+	}
 	log.Printf("Deleting existing histogram rows: %s\n", q.String())
 	query := t.client.Query(q.String())
 	_, err = query.Read(ctx)
 	if err != nil {
-		// This can happen if, for example, the table hasn't been created yet.
 		log.Printf("Warning: cannot remove previous rows (%v)", err)
 	}
-
-	return nil
+	return err
 }
 
 // UpdateHistogram generates the histogram data for the specified time range.

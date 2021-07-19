@@ -3,6 +3,7 @@ package histogram
 import (
 	"context"
 	"errors"
+	"net/http"
 	"reflect"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
 	"github.com/m-lab/go/prometheusx/promtest"
 	"github.com/m-lab/go/rtx"
+	"google.golang.org/api/googleapi"
 )
 
 // ***** mockClient *****
@@ -18,12 +20,14 @@ type mockClient struct {
 	bqiface.Client
 	queryReadMustFail bool
 	queryRunMustFail  bool
+	tableMissingErr   bool
 	queries           []string
 }
 
 func (c *mockClient) Dataset(name string) bqiface.Dataset {
 	return &mockDataset{
-		name: name,
+		name:            name,
+		tableMissingErr: c.tableMissingErr,
 	}
 }
 
@@ -39,21 +43,24 @@ func (c *mockClient) Query(query string) bqiface.Query {
 // ***** mockDataset *****
 type mockDataset struct {
 	bqiface.Dataset
-	name string
+	name            string
+	tableMissingErr bool
 }
 
 func (ds *mockDataset) Table(name string) bqiface.Table {
 	return &mockTable{
-		ds:   ds.name,
-		name: name,
+		ds:              ds.name,
+		name:            name,
+		tableMissingErr: ds.tableMissingErr,
 	}
 }
 
 // ***** mockTable *****
 type mockTable struct {
 	bqiface.Table
-	ds   string
-	name string
+	ds              string
+	name            string
+	tableMissingErr bool
 }
 
 func (t *mockTable) DatasetID() string {
@@ -62,6 +69,19 @@ func (t *mockTable) DatasetID() string {
 
 func (t *mockTable) TableID() string {
 	return t.name
+}
+
+func (t *mockTable) FullyQualifiedName() string {
+	return t.name
+}
+
+func (t *mockTable) Metadata(ctx context.Context) (*bigquery.TableMetadata, error) {
+	if t.tableMissingErr {
+		return nil, &googleapi.Error{
+			Code: http.StatusNotFound,
+		}
+	}
+	return nil, nil
 }
 
 // ********** mockQuery **********
@@ -113,6 +133,9 @@ func (j *mockJob) Wait(context.Context) (*bigquery.JobStatus, error) {
 	}
 	return &bigquery.JobStatus{
 		State: bigquery.Done,
+		Statistics: &bigquery.JobStatistics{
+			TotalBytesProcessed: 10,
+		},
 	}, nil
 }
 
@@ -136,6 +159,14 @@ func TestTable_queryConfig(t *testing.T) {
 func TestTable_deleteRows(t *testing.T) {
 	table := NewTable("test", "dataset", "query", &mockClient{})
 	err := table.deleteRows(context.Background(), time.Now(), time.Now().Add(1*time.Minute))
+	if err != nil {
+		t.Errorf("deleteRows() returned err: %v", err)
+	}
+
+	table = NewTable("test", "dataset", "query", &mockClient{
+		tableMissingErr: true,
+	})
+	err = table.deleteRows(context.Background(), time.Now(), time.Now().Add(1*time.Minute))
 	if err != nil {
 		t.Errorf("deleteRows() returned err: %v", err)
 	}
