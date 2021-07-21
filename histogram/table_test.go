@@ -188,14 +188,17 @@ func TestTable_UpdateHistogram(t *testing.T) {
 	rtx.Must(err, "cannot parse end time")
 	tests := []struct {
 		name    string
-		query   string
+		config  QueryConfig
 		client  *mockClient
 		want    []string
 		wantErr bool
 	}{
 		{
-			name:   "ok",
-			query:  "histogram generation query",
+			name: "ok",
+			config: QueryConfig{
+				Query:     "histogram generation query",
+				DateField: "date",
+			},
 			client: &mockClient{},
 			want: []string{
 				"DELETE FROM test_ds.test_table WHERE date BETWEEN \"2020-01-01\" AND \"2020-12-31\"",
@@ -203,16 +206,36 @@ func TestTable_UpdateHistogram(t *testing.T) {
 			},
 		},
 		{
-			name:  "delete-rows-failure",
-			query: "test",
+			name: "missing-date-field",
+			config: QueryConfig{
+				Query: "",
+			},
+			client:  &mockClient{},
+			wantErr: true,
+		},
+		{
+			name: "missing-query-field",
+			config: QueryConfig{
+				DateField: "date",
+			},
+			client:  &mockClient{},
+			wantErr: true,
+		},
+		{
+			name: "delete-rows-failure",
+			config: QueryConfig{
+				Query: "test",
+			},
 			client: &mockClient{
 				queryReadMustFail: true,
 			},
 			wantErr: true,
 		},
 		{
-			name:  "query-run-failure",
-			query: "test",
+			name: "query-run-failure",
+			config: QueryConfig{
+				Query: "test",
+			},
 			client: &mockClient{
 				queryRunMustFail: true,
 			},
@@ -222,11 +245,8 @@ func TestTable_UpdateHistogram(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hist := &Table{
-				Table: tt.client.Dataset("test_ds").Table("test_table"),
-				config: QueryConfig{
-					Query:     tt.query,
-					DateField: "date",
-				},
+				Table:  tt.client.Dataset("test_ds").Table("test_table"),
+				config: tt.config,
 				client: tt.client,
 			}
 			if err := hist.UpdateHistogram(context.Background(), start,

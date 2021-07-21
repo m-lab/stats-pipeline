@@ -3,6 +3,7 @@ package histogram
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"text/template"
@@ -115,6 +116,10 @@ func (t *Table) deleteRows(ctx context.Context, start, end time.Time) error {
 func (t *Table) UpdateHistogram(ctx context.Context, start, end time.Time) error {
 	log.Printf("Updating table %s\n", t.TableID())
 
+	if t.config.DateField == "" || t.config.Query == "" {
+		return errors.New("the Query and DateField must be specified")
+	}
+
 	// Make sure there aren't multiple histograms for this date range by
 	// removing any previously inserted rows.
 	err := t.deleteRows(ctx, start, end)
@@ -124,7 +129,7 @@ func (t *Table) UpdateHistogram(ctx context.Context, start, end time.Time) error
 
 	// Configure the histogram generation query.
 	qc := t.queryConfig(t.config.Query)
-	switch t.config.PartitionField {
+	switch t.config.PartitionType {
 	case RangePartitioning:
 		qc.RangePartitioning = &bigquery.RangePartitioning{
 			Field: t.config.PartitionField,
@@ -138,6 +143,8 @@ func (t *Table) UpdateHistogram(ctx context.Context, start, end time.Time) error
 		qc.TimePartitioning = &bigquery.TimePartitioning{
 			Field: t.config.PartitionField,
 		}
+	default:
+		// do nothing, since there is no need to partition the output.
 	}
 
 	qc.Dst = t.Table
