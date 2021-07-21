@@ -141,7 +141,7 @@ func (j *mockJob) Wait(context.Context) (*bigquery.JobStatus, error) {
 
 // ***** Tests *****
 func TestNewTable(t *testing.T) {
-	table := NewTable("test_table", "dataset", "SELECT 1", &mockClient{})
+	table := NewTable("test_table", "dataset", QueryConfig{}, &mockClient{})
 	if table == nil {
 		t.Errorf("NewTable() returned nil.")
 	}
@@ -149,7 +149,7 @@ func TestNewTable(t *testing.T) {
 
 func TestTable_queryConfig(t *testing.T) {
 	testQuery := "SELECT 1"
-	table := NewTable("test", "dataset", "", &mockClient{})
+	table := NewTable("test", "dataset", QueryConfig{}, &mockClient{})
 	q := table.queryConfig(testQuery)
 	if q.Q != testQuery {
 		t.Errorf("queryConfig(): expected %s, got %s.", testQuery, q.Q)
@@ -157,13 +157,14 @@ func TestTable_queryConfig(t *testing.T) {
 }
 
 func TestTable_deleteRows(t *testing.T) {
-	table := NewTable("test", "dataset", "query", &mockClient{})
+	emptyConfig := QueryConfig{}
+	table := NewTable("test", "dataset", emptyConfig, &mockClient{})
 	err := table.deleteRows(context.Background(), time.Now(), time.Now().Add(1*time.Minute))
 	if err != nil {
 		t.Errorf("deleteRows() returned err: %v", err)
 	}
 
-	table = NewTable("test", "dataset", "query", &mockClient{
+	table = NewTable("test", "dataset", emptyConfig, &mockClient{
 		tableMissingErr: true,
 	})
 	err = table.deleteRows(context.Background(), time.Now(), time.Now().Add(1*time.Minute))
@@ -171,7 +172,7 @@ func TestTable_deleteRows(t *testing.T) {
 		t.Errorf("deleteRows() returned err: %v", err)
 	}
 
-	table = NewTable("test", "dataset", "query", &mockClient{
+	table = NewTable("test", "dataset", emptyConfig, &mockClient{
 		queryReadMustFail: true,
 	})
 	err = table.deleteRows(context.Background(), time.Now(), time.Now().Add(1*time.Minute))
@@ -221,8 +222,11 @@ func TestTable_UpdateHistogram(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hist := &Table{
-				Table:  tt.client.Dataset("test_ds").Table("test_table"),
-				query:  tt.query,
+				Table: tt.client.Dataset("test_ds").Table("test_table"),
+				config: QueryConfig{
+					Query:     tt.query,
+					DateField: "date",
+				},
 				client: tt.client,
 			}
 			if err := hist.UpdateHistogram(context.Background(), start,
