@@ -141,7 +141,7 @@ func (j *mockJob) Wait(context.Context) (*bigquery.JobStatus, error) {
 
 // ***** Tests *****
 func TestNewTable(t *testing.T) {
-	table := NewTable("test_table", "dataset", "SELECT 1", &mockClient{})
+	table := NewTable("test_table", "dataset", QueryConfig{}, &mockClient{})
 	if table == nil {
 		t.Errorf("NewTable() returned nil.")
 	}
@@ -149,7 +149,7 @@ func TestNewTable(t *testing.T) {
 
 func TestTable_queryConfig(t *testing.T) {
 	testQuery := "SELECT 1"
-	table := NewTable("test", "dataset", "", &mockClient{})
+	table := NewTable("test", "dataset", QueryConfig{}, &mockClient{})
 	q := table.queryConfig(testQuery)
 	if q.Q != testQuery {
 		t.Errorf("queryConfig(): expected %s, got %s.", testQuery, q.Q)
@@ -157,13 +157,14 @@ func TestTable_queryConfig(t *testing.T) {
 }
 
 func TestTable_deleteRows(t *testing.T) {
-	table := NewTable("test", "dataset", "query", &mockClient{})
+	emptyConfig := QueryConfig{}
+	table := NewTable("test", "dataset", emptyConfig, &mockClient{})
 	err := table.deleteRows(context.Background(), time.Now(), time.Now().Add(1*time.Minute))
 	if err != nil {
 		t.Errorf("deleteRows() returned err: %v", err)
 	}
 
-	table = NewTable("test", "dataset", "query", &mockClient{
+	table = NewTable("test", "dataset", emptyConfig, &mockClient{
 		tableMissingErr: true,
 	})
 	err = table.deleteRows(context.Background(), time.Now(), time.Now().Add(1*time.Minute))
@@ -171,7 +172,7 @@ func TestTable_deleteRows(t *testing.T) {
 		t.Errorf("deleteRows() returned err: %v", err)
 	}
 
-	table = NewTable("test", "dataset", "query", &mockClient{
+	table = NewTable("test", "dataset", emptyConfig, &mockClient{
 		queryReadMustFail: true,
 	})
 	err = table.deleteRows(context.Background(), time.Now(), time.Now().Add(1*time.Minute))
@@ -187,14 +188,17 @@ func TestTable_UpdateHistogram(t *testing.T) {
 	rtx.Must(err, "cannot parse end time")
 	tests := []struct {
 		name    string
-		query   string
+		config  QueryConfig
 		client  *mockClient
 		want    []string
 		wantErr bool
 	}{
 		{
-			name:   "ok",
-			query:  "histogram generation query",
+			name: "ok",
+			config: QueryConfig{
+				Query:     "histogram generation query",
+				DateField: "date",
+			},
 			client: &mockClient{},
 			want: []string{
 				"DELETE FROM test_ds.test_table WHERE date BETWEEN \"2020-01-01\" AND \"2020-12-31\"",
@@ -202,16 +206,36 @@ func TestTable_UpdateHistogram(t *testing.T) {
 			},
 		},
 		{
-			name:  "delete-rows-failure",
-			query: "test",
+			name: "missing-date-field",
+			config: QueryConfig{
+				Query: "",
+			},
+			client:  &mockClient{},
+			wantErr: true,
+		},
+		{
+			name: "missing-query-field",
+			config: QueryConfig{
+				DateField: "date",
+			},
+			client:  &mockClient{},
+			wantErr: true,
+		},
+		{
+			name: "delete-rows-failure",
+			config: QueryConfig{
+				Query: "test",
+			},
 			client: &mockClient{
 				queryReadMustFail: true,
 			},
 			wantErr: true,
 		},
 		{
-			name:  "query-run-failure",
-			query: "test",
+			name: "query-run-failure",
+			config: QueryConfig{
+				Query: "test",
+			},
 			client: &mockClient{
 				queryRunMustFail: true,
 			},
@@ -222,7 +246,7 @@ func TestTable_UpdateHistogram(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			hist := &Table{
 				Table:  tt.client.Dataset("test_ds").Table("test_table"),
-				query:  tt.query,
+				config: tt.config,
 				client: tt.client,
 			}
 			if err := hist.UpdateHistogram(context.Background(), start,

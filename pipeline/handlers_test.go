@@ -14,6 +14,7 @@ import (
 
 	"github.com/googleapis/google-cloud-go-testing/bigquery/bqiface"
 	"github.com/m-lab/stats-pipeline/config"
+	"github.com/m-lab/stats-pipeline/histogram"
 )
 
 type mockClient struct {
@@ -44,7 +45,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		},
 	}
 
-	newHistogramTable = func(name, ds, query string,
+	newHistogramTable = func(name, ds string, config histogram.QueryConfig,
 		client bqiface.Client) HistogramTable {
 		return &mockHistogramTable{}
 	}
