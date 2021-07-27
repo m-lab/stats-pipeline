@@ -217,7 +217,7 @@ func TestNewHandler(t *testing.T) {
 	config := map[string]config.Config{}
 	h := NewHandler(mc, me, config)
 	if h == nil {
-		t.Errorf("NewHandler() returned nil")
+		t.Fatalf("NewHandler() returned nil")
 	}
 	if h.bqClient != mc || h.exporter != me || !reflect.DeepEqual(h.configs, config) {
 		t.Errorf("NewHandler() didn't return the expected handler")
