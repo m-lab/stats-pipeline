@@ -1,3 +1,9 @@
+# To invoke from command line:
+# bq query --use_legacy_sql=false --parameter='target_date:TIMESTAMP:2021-07-07 00:00:00' < statistics/queries/canary.sql
+
+# TODO - identify slow and far clients, instead of individual tests.
+# Otherwise, we are filtering out potentially important outlier tests, instead of weird clients.
+
 CREATE OR REPLACE TABLE `mlab-sandbox.gfr.metro_stats_2021` 
 PARTITION BY test_date
 CLUSTER BY metro, site
@@ -17,7 +23,7 @@ raw.Download.UUID, # Use this instead of id or a.UUID to ensure we are only usin
 # Consider adding client-server geo distance and country
 a.* EXCEPT(UUID)
 FROM `measurement-lab.ndt.ndt7`
-WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 16 DAY) # PARTITIONED on this (test_date)
+WHERE date BETWEEN DATE_SUB(DATE(@target_date), INTERVAL 16 DAY) AND DATE(@target_date)
 AND raw.Download IS NOT NULL
 ),
 
@@ -28,7 +34,7 @@ SELECT
   COUNT(uuid) AS tests, metro, site, machine,
 FROM primary
 # Without this, the query costs goes up dramatically.
-WHERE test_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 16 DAY) 
+WHERE test_date BETWEEN DATE_SUB(DATE(@target_date), INTERVAL 16 DAY) AND DATE(@target_date) 
 GROUP BY test_date, hour, machine, site, metro ),
 
 hours_per_day_per_machine AS (
@@ -49,7 +55,7 @@ FROM hours_per_day_per_machine
 GROUP BY test_date, metro ), 
 
 --------------------------------------------------------------------------- 
-
+# Tests per client, per machine and date.
 tests_per_client AS (
 SELECT 
   test_date, TestTime, 
@@ -191,7 +197,7 @@ GROUP BY date, metro, client
 # This could also be machine_summary sliding window partition if we want to compute multiple dates.
 good_clients AS (
 SELECT * FROM weekly_summary # mlab-sandbox.gfr.client_weekly_stats
-WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 8 DAY)
+WHERE date BETWEEN DATE_SUB(DATE(@target_date), INTERVAL 8 DAY) AND DATE(@target_date)
 AND client NOT IN
         ("45.56.98.222", "35.192.37.249", "35.225.75.192", "23.228.128.99",
         "2600:3c03::f03c:91ff:fe33:819",  "2605:a601:f1ff:fffe::99")
