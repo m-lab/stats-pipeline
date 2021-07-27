@@ -25,7 +25,7 @@ type mockExporter struct{}
 
 type mockHistogramTable struct{}
 
-func (ex *mockExporter) Export(context.Context, config.Config, *template.Template, string) error {
+func (ex *mockExporter) Export(context.Context, config.Config, *template.Template, int) error {
 	return nil
 }
 
@@ -66,7 +66,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			exporter: me,
 			config:   conf,
 			r: httptest.NewRequest(http.MethodPost,
-				"/v0/pipeline?year=2020&step=all", bytes.NewReader([]byte{})),
+				"/v0/pipeline?start=2021-01-01&end=2021-12-31&step=all",
+				bytes.NewReader([]byte{})),
 			statusCode: http.StatusOK,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{histogramsStep, exportsStep},
@@ -86,19 +87,29 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			},
 		},
 		{
-			name: "missing-parameter-year",
-			r: httptest.NewRequest(http.MethodPost, "/v0/pipeline",
+			name: "missing-parameter-start",
+			r: httptest.NewRequest(http.MethodPost, "/v0/pipeline?end=2021-12-31&step=all",
 				nil),
 			statusCode: http.StatusBadRequest,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{},
-				Errors:         []string{errMissingYear},
+				Errors:         []string{errMissingStartDate},
+			},
+		},
+		{
+			name: "missing-parameter-end",
+			r: httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2021-01-01&step=all",
+				nil),
+			statusCode: http.StatusBadRequest,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{},
+				Errors:         []string{errMissingEndDate},
 			},
 		},
 		{
 			name: "missing-parameter-step",
 			r: httptest.NewRequest(http.MethodPost,
-				"/v0/pipeline?year=2020", nil),
+				"/v0/pipeline?start=2021-01-01&end=2021-12-31", nil),
 			statusCode: http.StatusBadRequest,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{},
@@ -106,12 +117,66 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			},
 		},
 		{
-			name:       "action-histogram",
-			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?year=2020&step=histograms", bytes.NewReader([]byte{})),
+			name:       "action-histograms",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2021-01-01&end=2021-12-31&step=histograms", bytes.NewReader([]byte{})),
 			statusCode: http.StatusOK,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{histogramsStep},
 				Errors:         []string{},
+			},
+		},
+		{
+			name:       "action-exports",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2021-01-01&end=2021-12-31&step=exports", bytes.NewReader([]byte{})),
+			statusCode: http.StatusOK,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{exportsStep},
+				Errors:         []string{},
+			},
+		},
+		{
+			name:       "action-all",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2021-01-01&end=2021-12-31&step=all", bytes.NewReader([]byte{})),
+			statusCode: http.StatusOK,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{histogramsStep, exportsStep},
+				Errors:         []string{},
+			},
+		},
+		{
+			name:       "invalid-start",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=xyz&end=2021-12-31&step=all", bytes.NewReader([]byte{})),
+			statusCode: http.StatusBadRequest,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{},
+				Errors:         []string{"parsing time \"xyz\" as \"2006-01-02\": cannot parse \"xyz\" as \"2006\""},
+			},
+		},
+		{
+			name:       "invalid-end",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2021-01-01&end=xyz&step=all", bytes.NewReader([]byte{})),
+			statusCode: http.StatusBadRequest,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{},
+				Errors:         []string{"parsing time \"xyz\" as \"2006-01-02\": cannot parse \"xyz\" as \"2006\""},
+			},
+		},
+		{
+			name:       "invalid-range-multiple-years",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2020-01-01&end=2021-12-31&step=all", bytes.NewReader([]byte{})),
+			statusCode: http.StatusBadRequest,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{},
+				Errors:         []string{errInvalidDateRange},
+			},
+		},
+		{
+			name:       "invalid-range-start-after-end",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2021-01-01&end=2020-12-31&step=all", bytes.NewReader([]byte{})),
+			statusCode: http.StatusBadRequest,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{},
+				Errors:         []string{errInvalidDateRange},
 			},
 		},
 	}

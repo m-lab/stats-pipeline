@@ -167,7 +167,7 @@ func New(bqClient bqiface.Client, projectID string, output Writer) *JSONExporter
 // Note: config.OutputPath should not start with a "/".
 func (exporter *JSONExporter) Export(ctx context.Context,
 	config config.Config, queryTpl *template.Template,
-	year string) error {
+	year int) error {
 
 	// Retrieve list of fields from the output path template string.
 	fields, err := getFieldsFromPath(config.OutputPath)
@@ -183,10 +183,8 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	}
 
 	// The fully qualified name for a table is project.dataset.table_year.
-	sourceTable := fmt.Sprintf("%s.%s.%s_%s", exporter.projectID, config.Dataset,
+	sourceTable := fmt.Sprintf("%s.%s.%s_%d", exporter.projectID, config.Dataset,
 		config.Table, year)
-	// The table_year format is used in some metrics.
-	tableName := fmt.Sprintf("%s_%s", config.Table, year)
 
 	// Generate WHERE clauses to shard the export query.
 	clauses, err := exporter.getPartitionFilters(ctx, sourceTable)
@@ -206,13 +204,13 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	exporter.queriesDone = 0
 
 	// Reset metrics for this table to zero.
-	resetMetrics(tableName)
+	resetMetrics(config.Table)
 	inFlightUploadsHistogram.Reset()
 	uploadQueueSizeHistogram.Reset()
 
 	// The number of queries to run is the same as the number of clauses
 	// generated earlier.
-	queryTotalMetric.WithLabelValues(tableName).Set(float64(len(clauses)))
+	queryTotalMetric.WithLabelValues(config.Table).Set(float64(len(clauses)))
 
 	// Start a goroutine to print statistics periodically.
 	printStatsCtx, cancelPrintStats := context.WithCancel(ctx)
@@ -249,17 +247,17 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 		select {
 		case <-ctx.Done():
 			// If the context has been closed, we stop writing to the channel.
-			break
+			// FALLTHROUGH
 		default:
 			exporter.queryJobs <- &QueryJob{
-				name:       tableName,
+				name:       config.Table,
 				query:      buf.String(),
 				fields:     fields,
 				outputPath: outputPath,
 			}
 			// Atomically increase the queriesDone counter and update metric.
 			atomic.AddInt32(&exporter.queriesDone, 1)
-			queryProcessedMetric.WithLabelValues(tableName).Inc()
+			queryProcessedMetric.WithLabelValues(config.Table).Inc()
 		}
 	}
 	// The goroutines' termination is controlled by closing the channels they
