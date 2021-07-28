@@ -7,7 +7,7 @@ set -euxo pipefail
 PROJECT=${PROJECT:?Please provide project}
 
 # Start stats-pipeline for the past 2 days.
-start=$(date --date "-2 days" +%Y-%m-%d)
+start=$(date -d "@$(( $(date +%s) - 86400 * 2 ))" +%Y-%m-%d)
 end=$(date +%Y-%m-%d)
 
 if ! curl -X POST "http://stats-pipeline-service:8080/v0/pipeline?start=${start}&end=${end}&step=all"; then
