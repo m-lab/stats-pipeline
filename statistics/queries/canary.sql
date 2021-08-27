@@ -17,7 +17,7 @@ raw.Download.UUID, # Use this instead of id or a.UUID to ensure we are only usin
 # Consider adding client-server geo distance and country
 a.* EXCEPT(UUID)
 FROM `measurement-lab.ndt.ndt7`
-WHERE date BETWEEN DATE_SUB(DATE(@enddate), INTERVAL 16 DAY) AND DATE(@enddate)
+WHERE date BETWEEN DATE_SUB(DATE(@startdate), INTERVAL 16 DAY) AND DATE(@enddate)
 AND raw.Download IS NOT NULL
 ),
 
@@ -28,7 +28,7 @@ SELECT
   COUNT(uuid) AS tests, metro, site, machine,
 FROM primary
 # Without this, the query costs goes up dramatically.
-WHERE test_date BETWEEN DATE_SUB(DATE(@enddate), INTERVAL 16 DAY) AND DATE(@enddate)
+WHERE test_date BETWEEN DATE_SUB(DATE(@startdate), INTERVAL 16 DAY) AND DATE(@enddate)
 GROUP BY test_date, hour, machine, site, metro ),
 
 hours_per_day_per_machine AS (
@@ -191,7 +191,7 @@ GROUP BY date, metro, client
 # This could also be machine_summary sliding window partition if we want to compute multiple dates.
 good_clients AS (
 SELECT * FROM weekly_summary # mlab-sandbox.gfr.client_weekly_stats
-WHERE date BETWEEN DATE_SUB(DATE(@enddate), INTERVAL 8 DAY) AND DATE(@enddate)
+WHERE date BETWEEN DATE_SUB(DATE(@startdate), INTERVAL 8 DAY) AND DATE(@enddate)
 AND client NOT IN
         ("45.56.98.222", "35.192.37.249", "35.225.75.192", "23.228.128.99",
         "2600:3c03::f03c:91ff:fe33:819",  "2605:a601:f1ff:fffe::99")
