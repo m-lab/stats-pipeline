@@ -191,7 +191,7 @@ GROUP BY date, metro, client
 # This could also be machine_summary sliding window partition if we want to compute multiple dates.
 good_clients AS (
 SELECT * FROM weekly_summary # mlab-sandbox.gfr.client_weekly_stats
-WHERE date BETWEEN DATE_SUB(DATE(@startdate), INTERVAL 8 DAY) AND DATE(@enddate)
+WHERE date BETWEEN DATE_SUB(DATE(@enddate), INTERVAL 8 DAY) AND DATE(@enddate)
 AND client NOT IN
         ("45.56.98.222", "35.192.37.249", "35.225.75.192", "23.228.128.99",
         "2600:3c03::f03c:91ff:fe33:819",  "2605:a601:f1ff:fffe::99")
