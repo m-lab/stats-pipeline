@@ -8,12 +8,14 @@ WITH
 # This is the subset of data needed for the analysis.  It consists of about two
 # weeks of data, with metro, machine, and site broken out.
 primary AS (
-SELECT date AS test_date,
+SELECT date AS test_date, ID,
+Client, Server,
 REGEXP_EXTRACT(parser.ArchiveURL, ".*-(mlab[1-4])-.*") AS machine,
 REGEXP_EXTRACT(parser.ArchiveURL, ".*-mlab[1-4]-([a-z]{3}[0-9]{2}).*") AS site,
 REGEXP_EXTRACT(parser.ArchiveURL, ".*-mlab[1-4]-([a-z]{3})[0-9]{2}.*") AS metro,
 TIMESTAMP_DIFF(raw.Download.EndTime, raw.Download.StartTime, MICROSECOND)/1000000 AS duration,
 raw.clientIP,
+IFNULL(raw.Download.ClientMetadata, raw.Upload.ClientMetadata) AS tmpClientMetaData,
 raw.Download.UUID, # Use this instead of id or a.UUID to ensure we are only using Downloads (TODO??)
 # Consider adding client-server geo distance and country
 a.* EXCEPT(UUID)
@@ -22,12 +24,20 @@ WHERE date BETWEEN DATE_SUB(DATE(@startdate), INTERVAL 16 DAY) AND DATE(@enddate
 AND raw.Download IS NOT NULL
 ),
 
+add_client_name AS (
+  SELECT primary.* EXCEPT(tmpClientMetadata), clientName
+  FROM primary LEFT JOIN (
+    SELECT * EXCEPT(tmpClientMetadata, Name, Value), Value AS clientName
+    FROM primary, primary.tmpClientMetadata
+    WHERE Name = "client_name") cn USING (test_date, ID)
+),
+
 hours_per_machine AS (
 SELECT
   test_date,
   TIMESTAMP_TRUNC(TestTime, HOUR) AS hour,
   COUNT(uuid) AS tests, metro, site, machine,
-FROM primary
+FROM add_client_name
 # Without this, the query costs goes up dramatically.
 WHERE test_date BETWEEN DATE_SUB(DATE(@startdate), INTERVAL 16 DAY) AND DATE(@enddate)
 GROUP BY test_date, hour, machine, site, metro ),
@@ -58,7 +68,7 @@ SELECT
   clientIP AS client,
   UUID, # From Download
 #  MeanThroughputMbps AS mbps,
-FROM primary
+FROM add_client_name
 WHERE duration BETWEEN 9 and 13
 ),
 
@@ -208,8 +218,8 @@ ORDER BY machines DESC, metro
 
 downloads AS (
 SELECT
-  test_date, TestTime, metro, site, machine,
-  clientIP, uuid, CONTAINS_SUBSTR(uuid, "canary") AS iscanary, 
+  test_date, TestTime, metro, site, machine, Client, Server,
+  clientName, clientIP, uuid, CONTAINS_SUBSTR(uuid, "canary") AS iscanary, 
   CongestionControl AS cc,  #TODO
   MeanThroughputMbps AS mbps,
   #raw.Download[x].TCPInfo.Retransmits,  # empty/NULL
@@ -217,7 +227,7 @@ SELECT
   duration,
   MeanThroughputMbps <= 0.1 AS slow,
   duration BETWEEN 9 AND 13 AS complete,
-FROM primary
+FROM add_client_name
 ),
 
 --------------------------------------------------------------
@@ -229,7 +239,11 @@ FROM downloads D JOIN good_clients G ON D.clientIP = G.client AND D.metro = G.me
 ),
 
 stats AS (
-SELECT test_date, CURRENT_DATE() AS compute_date, metro, site, machine, iscanary, complete, slow, count(uuid) AS tests, 
+SELECT test_date, CURRENT_DATE() AS compute_date, 
+Client.Geo.countryName,
+Client.Network.ASName,
+metro, site, machine, 
+clientName, iscanary, complete, slow, COUNT(DISTINCT clientIP) AS clients, count(uuid) AS tests, 
 ROUND(EXP(AVG(IF(mbps > 0, LN(mbps), NULL))),2) AS log_mean_speed, 
 # ndt7 has only TCPINFO MinRTT, and reports in microseconds??  Using MinRTT instead of appMinRTT here and below
 # ndt5 was reporting in nanoseconds??
@@ -258,7 +272,8 @@ ROUND(SAFE_DIVIDE(COUNTIF(mbps > 300), COUNT(uuid)),3) AS over_300,
 COUNTIF(MinRTT > 50) AS far,
 ROUND(EXP(AVG(IF(MinRTT > 50 AND mbps > 0, LN(mbps), NULL))),3) AS logMeanFarMbps,
 FROM good_downloads
-GROUP BY metro, test_date, site, machine, iscanary, complete, slow
+GROUP BY test_date, countryName, ASName, metro, site, machine, iscanary, clientName, complete, slow
 )
 
 SELECT * FROM stats WHERE test_date BETWEEN @startdate AND @enddate
+--ORDER BY clientName, site, metro, ASName, countryName, complete DESC, slow
