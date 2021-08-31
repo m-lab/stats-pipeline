@@ -1,5 +1,6 @@
 # To invoke from command line:
 # bq query --use_legacy_sql=false --parameter='startdate:DATE:2021-07-05' --parameter='enddate:DATE:2021-07-07' < statistics/queries/canary.sql
+# bq query --use_legacy_sql=false --parameter='startdate:DATE:2021-07-05' --parameter='enddate:DATE:2021-08-30' --destination_table='mlab-sandbox:statistics.gfr' --time_partitioning_type=DAY --time_partitioning_field=test_date --replace  < statistics/queries/canary.sql
 
 # TODO - identify slow and far clients, instead of individual tests.
 # Otherwise, we are filtering out potentially important outlier tests, instead of weird clients.
