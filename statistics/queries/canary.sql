@@ -191,8 +191,8 @@ GROUP BY date, metro, client
 # This could also be machine_summary sliding window partition if we want to compute multiple dates.
 good_clients AS (
 SELECT * FROM weekly_summary # mlab-sandbox.gfr.client_weekly_stats
-WHERE date BETWEEN DATE_SUB(DATE(@enddate), INTERVAL 8 DAY) AND DATE(@enddate)
-AND client NOT IN
+--WHERE date BETWEEN DATE_SUB(DATE(@startdate), INTERVAL 8 DAY) AND DATE(@enddate)
+WHERE client NOT IN
         ("45.56.98.222", "35.192.37.249", "35.225.75.192", "23.228.128.99",
         "2600:3c03::f03c:91ff:fe33:819",  "2605:a601:f1ff:fffe::99")
 # Exclude clients more than twice as many tests as machines in the metro
@@ -228,7 +228,7 @@ FROM downloads D JOIN good_clients G ON D.clientIP = G.client AND D.metro = G.me
 ),
 
 stats AS (
-SELECT test_date, metro, site, machine, iscanary, complete, slow, count(uuid) AS tests, 
+SELECT test_date, CURRENT_DATE() AS compute_date, metro, site, machine, iscanary, complete, slow, count(uuid) AS tests, 
 ROUND(EXP(AVG(IF(mbps > 0, LN(mbps), NULL))),2) AS log_mean_speed, 
 # ndt7 has only TCPINFO MinRTT, and reports in microseconds??  Using MinRTT instead of appMinRTT here and below
 # ndt5 was reporting in nanoseconds??
