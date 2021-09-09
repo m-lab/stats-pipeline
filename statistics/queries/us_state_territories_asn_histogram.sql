@@ -162,7 +162,7 @@ ul_per_location AS (
     id,
     a.MeanThroughputMbps AS mbps,
     a.MinRTT AS MinRTT
-  FROM `measurement-lab.ndt.unified_downloads`, us_states
+  FROM `measurement-lab.ndt.unified_uploads`, us_states
   WHERE date BETWEEN @startdate AND @enddate
   AND ST_WITHIN(
     ST_GeogPoint(
