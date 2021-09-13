@@ -219,7 +219,8 @@ ORDER BY machines DESC, metro
 downloads AS (
 SELECT
   test_date, TestTime, metro, site, machine, Client, Server,
-  clientName, clientIP, uuid, CONTAINS_SUBSTR(uuid, "canary") AS iscanary, 
+  clientName, clientIP, uuid,
+  REGEXP_EXTRACT(uuid, "(ndt-?.*)-.*") AS NDTVersion,
   CongestionControl AS cc,  #TODO
   MeanThroughputMbps AS mbps,
   #raw.Download[x].TCPInfo.Retransmits,  # empty/NULL
@@ -243,7 +244,7 @@ SELECT test_date, CURRENT_DATE() AS compute_date,
 Client.Geo.countryName,
 Client.Network.ASName,
 metro, site, machine, 
-clientName, iscanary, complete, slow, COUNT(DISTINCT clientIP) AS clients, count(uuid) AS tests, 
+clientName, NDTVersion, complete, slow, COUNT(DISTINCT clientIP) AS clients, count(uuid) AS tests, 
 ROUND(EXP(AVG(IF(mbps > 0, LN(mbps), NULL))),2) AS log_mean_speed, 
 # ndt7 has only TCPINFO MinRTT, and reports in microseconds??  Using MinRTT instead of appMinRTT here and below
 # ndt5 was reporting in nanoseconds??
@@ -272,7 +273,7 @@ ROUND(SAFE_DIVIDE(COUNTIF(mbps > 300), COUNT(uuid)),3) AS over_300,
 COUNTIF(MinRTT > 50) AS far,
 ROUND(EXP(AVG(IF(MinRTT > 50 AND mbps > 0, LN(mbps), NULL))),3) AS logMeanFarMbps,
 FROM good_downloads
-GROUP BY test_date, countryName, ASName, metro, site, machine, iscanary, clientName, complete, slow
+GROUP BY test_date, countryName, ASName, metro, site, machine, NDTVersion, clientName, complete, slow
 )
 
 SELECT * FROM stats WHERE test_date BETWEEN @startdate AND @enddate
