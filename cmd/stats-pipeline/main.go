@@ -20,6 +20,7 @@ import (
 	"github.com/m-lab/go/uploader"
 	"github.com/m-lab/stats-pipeline/config"
 	"github.com/m-lab/stats-pipeline/exporter"
+	"github.com/m-lab/stats-pipeline/exporter/types"
 	"github.com/m-lab/stats-pipeline/output"
 	"github.com/m-lab/stats-pipeline/pipeline"
 )
@@ -90,7 +91,7 @@ func main() {
 	case "stats":
 		exp = exporter.New(bqiface.AdaptClient(bqClient), project, wr)
 	case "annotation":
-		panic("TODO(soltesz): implement annotation exporter")
+		exp = types.New(bqiface.AdaptClient(bqClient), project, wr)
 	case "hopannotation1":
 		panic("TODO: implement hopannotation1 exporter")
 	}
