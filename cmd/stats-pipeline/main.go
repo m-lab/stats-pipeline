@@ -34,6 +34,10 @@ var (
 		Options: []string{"gcs", "local"},
 		Value:   "gcs",
 	}
+	exportType = flagx.Enum{
+		Options: []string{"stats", "annotation", "hopannotation1"},
+		Value:   "stats",
+	}
 
 	configFile = flagx.File{}
 	mainCtx    = context.Background()
@@ -47,6 +51,7 @@ func init() {
 		"GCS bucket to export the result to")
 	flag.Var(&configFile, "config", "JSON configuration file")
 	flag.Var(&outputType, "output", "Output to gcs or local files.")
+	flag.Var(&exportType, "export", "Generate and export the named data type.")
 }
 
 func makeHTTPServer(listenAddr string, h http.Handler) *http.Server {
@@ -79,11 +84,20 @@ func main() {
 	case "local":
 		wr = output.NewLocalWriter(bucket)
 	}
-	exporter := exporter.New(bqiface.AdaptClient(bqClient), project, wr)
+
+	var exp pipeline.Exporter
+	switch exportType.Value {
+	case "stats":
+		exp = exporter.New(bqiface.AdaptClient(bqClient), project, wr)
+	case "annotation":
+		panic("TODO(soltesz): implement annotation exporter")
+	case "hopannotation1":
+		panic("TODO: implement hopannotation1 exporter")
+	}
 
 	// Initialize handlers.
 	pipelineHandler := pipeline.NewHandler(bqiface.AdaptClient(bqClient),
-		exporter, configs)
+		exp, configs)
 
 	// Initialize mux.
 	mux := http.NewServeMux()
