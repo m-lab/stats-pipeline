@@ -162,15 +162,6 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			},
 		},
 		{
-			name:       "invalid-range-multiple-years",
-			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2020-01-01&end=2021-12-31&step=all", bytes.NewReader([]byte{})),
-			statusCode: http.StatusBadRequest,
-			response: &pipelineResult{
-				CompletedSteps: []pipelineStep{},
-				Errors:         []string{errInvalidDateRange},
-			},
-		},
-		{
 			name:       "invalid-range-start-after-end",
 			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2021-01-01&end=2020-12-31&step=all", bytes.NewReader([]byte{})),
 			statusCode: http.StatusBadRequest,

@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -279,6 +280,9 @@ func ValidateDates(start, end string) (time.Time, time.Time, error) {
 	endTime, err := time.Parse(dateFormat, end)
 	if err != nil {
 		return time.Time{}, time.Time{}, err
+	}
+	if endTime.Before(startTime) {
+		return time.Time{}, time.Time{}, errors.New(errInvalidDateRange)
 	}
 	return startTime, endTime, nil
 }
