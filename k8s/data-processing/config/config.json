@@ -4,6 +4,9 @@
         "exportQueryFile": "statistics/exports/continents.sql",
         "dataset": "statistics",
         "table": "continents",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/{{ .continent_code }}/{{ .year }}/histogram_daily_stats.json"
     },
     "countries": {
@@ -11,6 +14,9 @@
         "exportQueryFile": "statistics/exports/countries.sql",
         "dataset": "statistics",
         "table": "countries",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .year }}/histogram_daily_stats.json"
     },
     "regions": {
@@ -18,6 +24,9 @@
         "exportQueryFile": "statistics/exports/regions.sql",
         "dataset": "statistics",
         "table": "regions",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .year }}/histogram_daily_stats.json"
     },
     "cities": {
@@ -25,6 +34,9 @@
         "exportQueryFile": "statistics/exports/cities.sql",
         "dataset": "statistics",
         "table": "cities",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .city }}/{{ .year }}/histogram_daily_stats.json"
     },
     "tracts": {
@@ -32,6 +44,9 @@
         "exportQueryFile": "statistics/exports/us_tracts.sql",
         "dataset": "statistics",
         "table": "us_tracts",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/NA/US/tracts/{{ .GEOID }}/{{ .year }}/histogram_daily_stats.json"
     },
     "states": {
@@ -39,6 +54,9 @@
         "exportQueryFile": "statistics/exports/us_states.sql",
         "dataset": "statistics",
         "table": "us_states",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/NA/US/states/{{ .GEOID }}/{{ .year }}/histogram_daily_stats.json"
     },
     "counties": {
@@ -46,6 +64,9 @@
         "exportQueryFile": "statistics/exports/us_counties.sql",
         "dataset": "statistics",
         "table": "us_counties",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/NA/US/counties/{{ .GEOID }}/{{ .year }}/histogram_daily_stats.json"
     },
     "continents_asn": {
@@ -53,6 +74,9 @@
         "exportQueryFile": "statistics/exports/continents_asn.sql",
         "dataset": "statistics",
         "table": "continents_asn",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/{{ .continent_code }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
     },
     "countries_asn": {
@@ -60,6 +84,9 @@
         "exportQueryFile": "statistics/exports/countries_asn.sql",
         "dataset": "statistics",
         "table": "countries_asn",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
     },
     "regions_asn": {
@@ -67,6 +94,9 @@
         "exportQueryFile": "statistics/exports/regions_asn.sql",
         "dataset": "statistics",
         "table": "regions_asn",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
     },
     "cities_asn": {
@@ -74,6 +104,9 @@
         "exportQueryFile": "statistics/exports/cities_asn.sql",
         "dataset": "statistics",
         "table": "cities_asn",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/{{ .continent_code }}/{{ .country_code }}/{{ .ISO3166_2region1 }}/{{ .city }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
     },
     "states_asn": {
@@ -81,6 +114,9 @@
         "exportQueryFile": "statistics/exports/us_states_asn.sql",
         "dataset": "statistics",
         "table": "us_states_asn",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/NA/US/states/{{ .GEOID }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
     },
     "counties_asn": {
@@ -88,6 +124,9 @@
         "exportQueryFile": "statistics/exports/us_counties_asn.sql",
         "dataset": "statistics",
         "table": "us_counties_asn",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/NA/US/counties/{{ .GEOID }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
     },
     "tracts_asn": {
@@ -95,6 +134,9 @@
         "exportQueryFile": "statistics/exports/us_tracts_asn.sql",
         "dataset": "statistics",
         "table": "us_tracts_asn",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/NA/US/tracts/{{ .GEOID }}/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
     },
     "global_asn": {
@@ -102,6 +144,9 @@
         "exportQueryFile": "statistics/exports/global_asn.sql",
         "dataset": "statistics",
         "table": "global_asn",
+        "dateField": "date",
+        "partitionField": "shard",
+        "partitionType": "range",
         "outputPath": "v0/asn/{{ .asn }}/{{ .year }}/histogram_daily_stats.json"
     },
     "canary": {
