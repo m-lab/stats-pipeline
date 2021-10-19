@@ -227,3 +227,65 @@ func TestNewHandler(t *testing.T) {
 		t.Errorf("NewHandler() didn't return a properly initialized handler.")
 	}
 }
+
+func Test_getYearlyRanges(t *testing.T) {
+	tests := []struct {
+		name  string
+		start time.Time
+		end   time.Time
+		want  [][]time.Time
+	}{
+		{
+			name:  "single-year",
+			start: time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC),
+			end:   time.Date(2021, time.December, 31, 0, 0, 0, 0, time.UTC),
+			want: [][]time.Time{
+				{
+					time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2021, time.December, 31, 0, 0, 0, 0, time.UTC),
+				},
+			},
+		},
+		{
+			name:  "two-adjacent-years",
+			start: time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+			end:   time.Date(2021, time.August, 31, 0, 0, 0, 0, time.UTC),
+			want: [][]time.Time{
+				{
+					time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2020, time.December, 31, 0, 0, 0, 0, time.UTC),
+				},
+				{
+					time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2021, time.August, 31, 0, 0, 0, 0, time.UTC),
+				},
+			},
+		},
+		{
+			name:  "multiple-years",
+			start: time.Date(2020, time.March, 1, 0, 0, 0, 0, time.UTC),
+			end:   time.Date(2022, time.August, 31, 0, 0, 0, 0, time.UTC),
+			want: [][]time.Time{
+				{
+					time.Date(2020, time.March, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2020, time.December, 31, 0, 0, 0, 0, time.UTC),
+				},
+				{
+					time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2021, time.December, 31, 0, 0, 0, 0, time.UTC),
+				},
+				{
+					time.Date(2022, time.January, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2022, time.August, 31, 0, 0, 0, 0, time.UTC),
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := getYearlyRanges(tt.start, tt.end); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getYearlyRanges() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

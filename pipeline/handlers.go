@@ -3,7 +3,6 @@ package pipeline
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -160,23 +159,38 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) runPipeline(ctx context.Context, step string,
 	start, end time.Time) (pipelineResult, error) {
 	result := newPipelineResult()
+
+	// Get all the yearly ranges between the start and end date.
+	// Since output tables are per year, if the start and end dates
+	// are in different years, we need to update the table for each
+	// year.
+	ranges := getYearlyRanges(start, end)
+
 	if step == "all" || step == "histograms" {
 		// Update all the histogram tables.
 		for name, config := range h.configs {
-			if ctx.Err() != nil {
-				// If the request's context has been canceled, we must return here.
-				return result, ctx.Err()
+			for _, r := range ranges {
+				if ctx.Err() != nil {
+					// If the request's context has been canceled, we must
+					// return here.
+					return result, ctx.Err()
+				}
+				rangeStart := r[0]
+				rangeEnd := r[1]
+
+				log.Printf("Updating histogram table %s between %s and %s...",
+					name, rangeStart, rangeEnd)
+				err := h.runQueryBetweenDates(ctx, config, rangeStart, rangeEnd)
+				if err != nil {
+					// If one of the histogram queries fail, we still want to
+					// try the remaining ones for this range.
+					log.Printf("Cannot update histogram %s: %v", name, err)
+					result.Errors = append(result.Errors,
+						fmt.Sprintf("Cannot update histogram %s: %v", name, err))
+					continue
+				}
 			}
-			log.Printf("Updating histogram table %s between %s and %s...", name, start, end)
-			err := h.runQueryBetweenDates(ctx, config, start, end)
-			if err != nil {
-				// If one of the histogram queries fail, we still want to try the
-				// remaining ones.
-				log.Printf("Cannot update histogram %s: %v", name, err)
-				result.Errors = append(result.Errors,
-					fmt.Sprintf("Cannot update histogram %s: %v", name, err))
-				continue
-			}
+
 		}
 		result.CompletedSteps = append(result.CompletedSteps, histogramsStep)
 	}
@@ -184,17 +198,21 @@ func (h *Handler) runPipeline(ctx context.Context, step string,
 	if step == "all" || step == "exports" {
 		// Export data to GCS.
 		for name, config := range h.configs {
-			if ctx.Err() != nil {
-				// If the request's context has been canceled, we must return here.
-				return result, ctx.Err()
-			}
-			log.Printf("Exporting %s for year %d...", name, end.Year())
-			err := h.exportYear(ctx, config, end.Year())
-			if err != nil {
-				log.Printf("Error while exporting %s: %v",
-					config.Table, err)
-				result.Errors = append(result.Errors, fmt.Sprintf(
-					"Error while exporting %s: %v", config.Table, err))
+			for _, r := range ranges {
+				year := r[0].Year()
+				if ctx.Err() != nil {
+					// If the request's context has been canceled, we must
+					// return here.
+					return result, ctx.Err()
+				}
+				log.Printf("Exporting %s for year %d...", name, year)
+				err := h.exportYear(ctx, config, end.Year())
+				if err != nil {
+					log.Printf("Error while exporting %s: %v",
+						config.Table, err)
+					result.Errors = append(result.Errors, fmt.Sprintf(
+						"Error while exporting %s: %v", config.Table, err))
+				}
 			}
 		}
 		result.CompletedSteps = append(result.CompletedSteps, exportsStep)
@@ -262,8 +280,39 @@ func ValidateDates(start, end string) (time.Time, time.Time, error) {
 	if err != nil {
 		return time.Time{}, time.Time{}, err
 	}
-	if startTime.After(endTime) || startTime.Year() != endTime.Year() {
-		return time.Time{}, time.Time{}, errors.New(errInvalidDateRange)
-	}
 	return startTime, endTime, nil
+}
+
+// getYearlyRanges splits the start/end range into one or more per-year ranges.
+// For example, if the start date is 2017-01-01 and the end date is 2017-12-31,
+// this function will return a slice with a single range of 2017-01-01 to
+// 2017-12-31. If the start date is 2017-01-01 and the end date is 2018-07-01,
+// this function will return a slice with two ranges of 2017-01-01 to 2017-12-31
+// and 2018-01-01 to 2018-07-01.
+func getYearlyRanges(start, end time.Time) [][]time.Time {
+	var ranges [][]time.Time
+	if start.Year() == end.Year() {
+		// If the start and end dates are in the same year, we only need one
+		// range.
+		ranges = append(ranges, []time.Time{start, end})
+	} else {
+		// If the start and end dates are in different years, we need a range
+		// for each year.
+		// We start by adding the first year.
+		ranges = append(ranges, []time.Time{start, time.Date(start.Year(),
+			12, 31, 0, 0, 0, 0, time.UTC)})
+
+		// Then we add the remaining years. If the start and end years are
+		// adjacent, this loop won't do anything.
+		for year := start.Year() + 1; year < end.Year(); year++ {
+			ranges = append(ranges, []time.Time{time.Date(year, 1, 1, 0, 0, 0,
+				0, time.UTC), time.Date(year, 12, 31, 0, 0, 0, 0, time.UTC)})
+		}
+
+		// Finally, we add the last year.
+		ranges = append(ranges, []time.Time{time.Date(end.Year(), 1, 1, 0, 0, 0,
+			0, time.UTC), end})
+
+	}
+	return ranges
 }
