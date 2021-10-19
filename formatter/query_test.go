@@ -30,7 +30,7 @@ func TestStatsQueryFormatter_Source(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := &StatsQueryFormatter{}
+			f := NewStatsQueryFormatter()
 			if got := f.Source(tt.project, tt.config, tt.year); got != tt.want {
 				t.Errorf("StatsQueryFormatter.Source() = %#v, want %#v", got, tt.want)
 			}
@@ -55,7 +55,7 @@ func TestStatsQueryFormatter_Partitions(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := &StatsQueryFormatter{}
+			f := NewStatsQueryFormatter()
 			if got := f.Partitions(tt.source); got != tt.want {
 				t.Errorf("StatsQueryFormatter.Partitions() = %v, want %v", got, tt.want)
 			}
@@ -79,7 +79,7 @@ func TestStatsQueryFormatter_Where(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := &StatsQueryFormatter{}
+			f := NewStatsQueryFormatter()
 			if got := f.Where(tt.row); got != tt.want {
 				t.Errorf("StatsQueryFormatter.Where() = %v, want %v", got, tt.want)
 			}
@@ -116,7 +116,7 @@ func TestStatsQueryFormatter_Marshal(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := &StatsQueryFormatter{}
+			f := NewStatsQueryFormatter()
 			got, err := f.Marshal(tt.rows)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("StatsQueryFormatter.Marshal() error = %v, wantErr %v", err, tt.wantErr)
