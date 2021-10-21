@@ -3,12 +3,11 @@ package exporter
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
-	"fmt"
 	"log"
 	"regexp"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"text/template"
@@ -104,6 +103,7 @@ type JSONExporter struct {
 	bqClient  bqiface.Client
 	projectID string
 	output    Writer
+	format    Formatter
 
 	queryJobs  chan *QueryJob
 	uploadJobs chan *UploadJob
@@ -136,16 +136,26 @@ type QueryJob struct {
 }
 
 // New creates a new JSONExporter.
-func New(bqClient bqiface.Client, projectID string, output Writer) *JSONExporter {
+func New(bqClient bqiface.Client, projectID string, output Writer, format Formatter) *JSONExporter {
 	return &JSONExporter{
 		bqClient:  bqClient,
 		projectID: projectID,
 		output:    output,
+		format:    format,
 
 		queryJobs:  make(chan *QueryJob),
 		uploadJobs: make(chan *UploadJob),
 		results:    make(chan UploadResult),
 	}
+}
+
+// Formatter is the interface for all types that format table sources and
+// queries used during the export process.
+type Formatter interface {
+	Source(project string, config config.Config, year int) string
+	Partitions(source string) string
+	Where(row map[string]bigquery.Value) string
+	Marshal(rows []map[string]bigquery.Value) ([]byte, error)
 }
 
 // Export runs the provided SQL query and, for each row in the result, uploads
@@ -182,11 +192,14 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 		return err
 	}
 
+	// TODO(soltesz): Remove when year parameter is an int.
+	yeari, err := strconv.Atoi(year)
+	if err != nil {
+		return err
+	}
+
 	// The fully qualified name for a table is project.dataset.table_year.
-	sourceTable := fmt.Sprintf("%s.%s.%s_%s", exporter.projectID, config.Dataset,
-		config.Table, year)
-	// The table_year format is used in some metrics.
-	tableName := fmt.Sprintf("%s_%s", config.Table, year)
+	sourceTable := exporter.format.Source(exporter.projectID, config, yeari)
 
 	// Generate WHERE clauses to shard the export query.
 	clauses, err := exporter.getPartitionFilters(ctx, sourceTable)
@@ -206,13 +219,13 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	exporter.queriesDone = 0
 
 	// Reset metrics for this table to zero.
-	resetMetrics(tableName)
+	resetMetrics(config.Table)
 	inFlightUploadsHistogram.Reset()
 	uploadQueueSizeHistogram.Reset()
 
 	// The number of queries to run is the same as the number of clauses
 	// generated earlier.
-	queryTotalMetric.WithLabelValues(tableName).Set(float64(len(clauses)))
+	queryTotalMetric.WithLabelValues(config.Table).Set(float64(len(clauses)))
 
 	// Start a goroutine to print statistics periodically.
 	printStatsCtx, cancelPrintStats := context.WithCancel(ctx)
@@ -252,14 +265,14 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 			break
 		default:
 			exporter.queryJobs <- &QueryJob{
-				name:       tableName,
+				name:       config.Table,
 				query:      buf.String(),
 				fields:     fields,
 				outputPath: outputPath,
 			}
 			// Atomically increase the queriesDone counter and update metric.
 			atomic.AddInt32(&exporter.queriesDone, 1)
-			queryProcessedMetric.WithLabelValues(tableName).Inc()
+			queryProcessedMetric.WithLabelValues(config.Table).Inc()
 		}
 	}
 	// The goroutines' termination is controlled by closing the channels they
@@ -353,7 +366,7 @@ func (exporter *JSONExporter) processQueryResults(it bqiface.RowIterator,
 		// We are in the middle or start of a file, so just append the current
 		// row to currentFile. The partitionField is removed from the output.
 		currentFile = append(currentFile, removeFieldsFromRow(currentRow,
-			[]string{}))
+			[]string{partitionField}))
 		// Save relevant fields for comparison in the next iteration.
 		// Note: we can't just do lastRow = currentRow here as it would be a
 		// reference; we need to copy.
@@ -389,7 +402,7 @@ func (exporter *JSONExporter) uploadFile(j *QueryJob, rows []bqRow, lastRow bqRo
 		return err
 	}
 	atomic.AddInt32(&exporter.uploadQLen, 1)
-	marshalAndUpload(j.name, buf.String(), rows, exporter.uploadJobs)
+	exporter.marshalAndUpload(j.name, buf.String(), rows, exporter.uploadJobs)
 	return nil
 }
 
@@ -430,10 +443,9 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context, wg *sync.WaitGro
 // - [...]
 func (exporter *JSONExporter) getPartitionFilters(ctx context.Context,
 	fullyQualifiedTable string) ([]string, error) {
-	selectQuery := fmt.Sprintf(`SELECT %s FROM %s GROUP BY %[1]s
-		ORDER BY COUNT(*) DESC`, partitionField, fullyQualifiedTable)
-	log.Print(selectQuery)
-	q := exporter.bqClient.Query(selectQuery)
+	partitions := exporter.format.Partitions(fullyQualifiedTable)
+	log.Print(partitions)
+	q := exporter.bqClient.Query(partitions)
 	it, err := q.Read(ctx)
 	if err != nil {
 		log.Print(err)
@@ -450,8 +462,7 @@ func (exporter *JSONExporter) getPartitionFilters(ctx context.Context,
 		if err != nil {
 			return nil, err
 		}
-		partition := row[partitionField].(int64)
-		clauses = append(clauses, fmt.Sprintf("WHERE %s = %d", partitionField, partition))
+		clauses = append(clauses, exporter.format.Where(row))
 	}
 	return clauses, nil
 }
@@ -459,9 +470,9 @@ func (exporter *JSONExporter) getPartitionFilters(ctx context.Context,
 // marshalAndUpload marshals the BigQuery rows into a JSON array and sends a
 // new UploadJob to the uploadJobs channel so the result is uploaded to GCS as
 // objName.
-func marshalAndUpload(tableName, objName string, rows []bqRow,
+func (exporter *JSONExporter) marshalAndUpload(tableName, objName string, rows []bqRow,
 	uploadJobs chan<- *UploadJob) error {
-	j, err := json.Marshal(rows)
+	j, err := exporter.format.Marshal(rows)
 	if err != nil {
 		return err
 	}
@@ -519,7 +530,6 @@ func getFieldsFromPath(path string) ([]string, error) {
 // also removes the partitioning field if present.
 func removeFieldsFromRow(row bqRow, fields []string) bqRow {
 	newRow := bqRow{}
-	fields = append(fields, partitionField)
 	for fieldName, fieldValue := range row {
 		found := false
 		for _, k := range fields {
