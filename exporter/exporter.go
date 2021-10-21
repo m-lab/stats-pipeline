@@ -192,7 +192,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 		return err
 	}
 
-	// TODO: Remove when year parameter is an int.
+	// TODO(soltesz): Remove when year parameter is an int.
 	yeari, err := strconv.Atoi(year)
 	if err != nil {
 		return err
