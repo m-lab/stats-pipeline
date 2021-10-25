@@ -78,7 +78,7 @@ FROM add_client_name
 WHERE duration BETWEEN 9 and 13
 ),
 
----------------------------------------------------------------------
+---------------------------------------------------------------------------
 # Count tests per machine, and join with hours per machine
 machine_summary AS (
   SELECT
@@ -94,7 +94,7 @@ machine_summary AS (
   GROUP BY metro, site, machine, client, test_date, hours
 ),
 
----------------------------------------------------------------------
+---------------------------------------------------------------------------
 # This will be very expensive.
 # This should create a lot of empty rows, for clients that appear in metro, but not on a machine.
 with_hours AS (
@@ -104,7 +104,7 @@ with_hours AS (
     machine_summary.test_date = good_machines_per_metro.test_date)
 ),
 
----------------------------------------------------------------------
+---------------------------------------------------------------------------
 # Not clear if this is actually useful as aggregate.
 metro_summary AS (
   SELECT
@@ -115,7 +115,7 @@ metro_summary AS (
   GROUP BY metro, client, test_date, good_hours, metro_hours, good_machines, metro_machines
 ),
 
----------------------------------------------------------------------
+---------------------------------------------------------------------------
 # All metros, 7 dates takes about 1 slot hour, produces 2M rows of good clients.
 # CROSS JOIN produces about 150M rows.
 
@@ -126,7 +126,7 @@ metro_machine_summary AS (
   GROUP BY test_date, metro, client, site, machine, tests
 ),
 
----------------------------------------------------------------------
+---------------------------------------------------------------------------
 # extract complete list of machine per metro/date
 machine_hours AS (
   SELECT test_date, metro, machine
@@ -134,7 +134,7 @@ machine_hours AS (
   GROUP BY test_date, metro, machine
 ),
 
----------------------------------------------------------------------
+---------------------------------------------------------------------------
 # extract complete list of clients per metro/date
 clients AS (
   SELECT test_date, metro, client
@@ -143,7 +143,7 @@ clients AS (
   GROUP BY test_date, metro, client
 ),
 
----------------------------------------------------------------------
+---------------------------------------------------------------------------
 # create a complete list of machine/client pairs per metro/date
 # This is quite large - about 100M pairs worldwide for a one week window.
 machine_clients AS (
@@ -155,7 +155,7 @@ machine_clients AS (
   WHERE machine_hours.metro = clients.metro AND machine_hours.test_date = clients.test_date
 ),
 
----------------------------------------------------------------------
+---------------------------------------------------------------------------
 # Now join the machine/client pairs with the original metro_machine_summaryed data.
 # This produces a full complement of rows for each client/metro/date.
 joined AS (
@@ -171,7 +171,7 @@ joined AS (
     machine_clients.machine = metro_machine_summary.machine
 ),
 
----------------------------------------------------------------------
+---------------------------------------------------------------------------
 # Now aggregate over the past week, to produce machine_summary complete distribution of tests
 # per client across all machine_hours in each metro.
 past_week AS (
@@ -187,7 +187,7 @@ past_week AS (
   )
 ),
 
----------------------------------------------------------------------
+---------------------------------------------------------------------------
 # Now summarize the data for each client/metro
 weekly_summary AS (
   SELECT
@@ -209,7 +209,7 @@ weekly_summary AS (
   GROUP BY date, metro, client
 ),
 
---------------------------------------------------------------
+---------------------------------------------------------------------------
 # Metro stats
 # Order:
 #  2020-06-06 ndt5 per machine client stats, last 10 days
@@ -250,8 +250,7 @@ downloads AS (
   FROM add_client_name
 ),
 
---------------------------------------------------------------
-
+---------------------------------------------------------------------------
 # Good downloads should include only those clients that meet the good_client criteria.
 good_downloads AS (
   SELECT D.*
