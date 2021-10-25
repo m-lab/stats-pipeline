@@ -102,14 +102,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Read start / end dates from the request.
 	start := r.URL.Query().Get("start")
 	if start == "" {
-		result.Errors = append(result.Errors, errMissingStartDate)
+		result.Errors = append(result.Errors, errMissingStartDate.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(result)
 		return
 	}
 	end := r.URL.Query().Get("end")
 	if end == "" {
-		result.Errors = append(result.Errors, errMissingEndDate)
+		result.Errors = append(result.Errors, errMissingEndDate.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(result)
 		return
@@ -124,7 +124,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	step := r.URL.Query().Get("step")
 	if step == "" {
-		result.Errors = append(result.Errors, errMissingStep)
+		result.Errors = append(result.Errors, errMissingStep.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(result)
 		return
@@ -138,7 +138,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.pipelineCanRun <- true
 		}()
 	default:
-		result.Errors = append(result.Errors, errAlreadyRunning)
+		result.Errors = append(result.Errors, errAlreadyRunning.Error())
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(result)
 		return
@@ -282,7 +282,7 @@ func ValidateDates(start, end string) (time.Time, time.Time, error) {
 		return time.Time{}, time.Time{}, err
 	}
 	if endTime.Before(startTime) {
-		return time.Time{}, time.Time{}, errors.New(errInvalidDateRange)
+		return time.Time{}, time.Time{}, errors.New(errInvalidDateRange.Error())
 	}
 	return startTime, endTime, nil
 }

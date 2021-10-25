@@ -93,7 +93,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			statusCode: http.StatusBadRequest,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{},
-				Errors:         []string{errMissingStartDate},
+				Errors:         []string{errMissingStartDate.Error()},
 			},
 		},
 		{
@@ -103,7 +103,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			statusCode: http.StatusBadRequest,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{},
-				Errors:         []string{errMissingEndDate},
+				Errors:         []string{errMissingEndDate.Error()},
 			},
 		},
 		{
@@ -113,7 +113,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			statusCode: http.StatusBadRequest,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{},
-				Errors:         []string{errMissingStep},
+				Errors:         []string{errMissingStep.Error()},
 			},
 		},
 		{
@@ -167,7 +167,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			statusCode: http.StatusBadRequest,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{},
-				Errors:         []string{errInvalidDateRange},
+				Errors:         []string{errInvalidDateRange.Error()},
 			},
 		},
 	}
