@@ -12,6 +12,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/m-lab/stats-pipeline/formatter"
+
 	"github.com/m-lab/stats-pipeline/output"
 
 	"cloud.google.com/go/bigquery"
@@ -146,7 +148,8 @@ func TestNew(t *testing.T) {
 	testingx.Must(t, err, "cannot init bq client")
 	gcs := &gcsfake.GCSClient{}
 	wr := output.NewGCSWriter(uploader.New(gcs, "test-bucket"))
-	exporter := New(bq, "project", wr)
+	f := formatter.NewStatsQueryFormatter()
+	exporter := New(bq, "project", wr, f)
 	if exporter == nil {
 		t.Fatalf("New() returned nil.")
 	}
@@ -157,13 +160,16 @@ func TestNew(t *testing.T) {
 }
 
 func TestJSONExporter_marshalAndUpload(t *testing.T) {
+	exporter := &JSONExporter{
+		format: formatter.NewStatsQueryFormatter(),
+	}
 	jobs := make(chan *UploadJob)
 	fakeRow := bqRow{
 		"field": "value",
 	}
 	rows := []bqRow{fakeRow}
 	go func() {
-		err := marshalAndUpload("tablename", "test", rows, jobs)
+		err := exporter.marshalAndUpload("tablename", "test", rows, jobs)
 		if err != nil {
 			t.Errorf("marshalAndUpload() returned err: %v", err)
 		}
@@ -186,7 +192,7 @@ func TestJSONExporter_marshalAndUpload(t *testing.T) {
 	rows = append(rows, unmarshallableRow)
 	jobs = make(chan *UploadJob)
 	go func() {
-		err := marshalAndUpload("tablename", "this-will-fail", rows, jobs)
+		err := exporter.marshalAndUpload("tablename", "this-will-fail", rows, jobs)
 		if err == nil {
 			t.Errorf("marshalAndUpload(): expected error, got nil")
 		}
@@ -208,7 +214,8 @@ func Test_printStats(t *testing.T) {
 	testingx.Must(t, err, "cannot init bq client")
 	gcs := &gcsfake.GCSClient{}
 	wr := output.NewGCSWriter(uploader.New(gcs, "test-bucket"))
-	exporter := New(bq, "project", wr)
+	f := formatter.NewStatsQueryFormatter()
+	exporter := New(bq, "project", wr, f)
 
 	go exporter.printStats(ctx, 1)
 	// Send a successful upload and an error, then check the output after a
@@ -311,6 +318,7 @@ func TestPrometheusMetrics(t *testing.T) {
 func TestJSONExporter_processQueryResults(t *testing.T) {
 	exporter := &JSONExporter{
 		uploadJobs: make(chan *UploadJob),
+		format:     formatter.NewStatsQueryFormatter(),
 	}
 	// Create an iterator returning a fake row.
 	it := &mockRowIterator{

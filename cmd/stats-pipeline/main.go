@@ -20,7 +20,7 @@ import (
 	"github.com/m-lab/go/uploader"
 	"github.com/m-lab/stats-pipeline/config"
 	"github.com/m-lab/stats-pipeline/exporter"
-	"github.com/m-lab/stats-pipeline/exporter/types"
+	"github.com/m-lab/stats-pipeline/formatter"
 	"github.com/m-lab/stats-pipeline/output"
 	"github.com/m-lab/stats-pipeline/pipeline"
 )
@@ -86,15 +86,16 @@ func main() {
 		wr = output.NewLocalWriter(bucket)
 	}
 
-	var exp pipeline.Exporter
+	var f exporter.Formatter
 	switch exportType.Value {
 	case "stats":
-		exp = exporter.New(bqiface.AdaptClient(bqClient), project, wr)
+		f = formatter.NewStatsQueryFormatter()
 	case "annotation":
-		exp = types.New(bqiface.AdaptClient(bqClient), project, wr)
+		panic("TODO(soltesz): implement annotation formatter")
 	case "hopannotation1":
-		panic("TODO: implement hopannotation1 exporter")
+		panic("TODO: implement hopannotation1 formatter")
 	}
+	exp := exporter.New(bqiface.AdaptClient(bqClient), project, wr, f)
 
 	// Initialize handlers.
 	pipelineHandler := pipeline.NewHandler(bqiface.AdaptClient(bqClient),
