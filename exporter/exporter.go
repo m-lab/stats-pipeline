@@ -240,7 +240,25 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 		go exporter.uploadWorker(ctx, &uploadWg)
 	}
 
+	// The goroutines' termination is controlled by closing the channels they
+	// work on. The fist WaitGroup makes sure all the query workers have been
+	// terminated before terminating the upload workers. The second one makes
+	// sure all the upload workers have been terminated before returning.
+	// This makes sure close/wait are always called, and in the right order.
+	defer func() {
+		close(exporter.queryJobs)
+		queryWg.Wait()
+		close(exporter.uploadJobs)
+		uploadWg.Wait()
+		close(exporter.results)
+	}()
+
 	for _, v := range clauses {
+		// If the context has been canceled, stop sending jobs.
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
 		// Execute the query template and send the query to one of the
 		// available queryWorker functions.
 		var buf bytes.Buffer
@@ -252,30 +270,18 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 			log.Print(err)
 			break
 		}
-		select {
-		case <-ctx.Done():
-			// If the context has been closed, we stop writing to the channel.
-			// FALLTHROUGH
-		default:
-			exporter.queryJobs <- &QueryJob{
-				name:       config.Table,
-				query:      buf.String(),
-				fields:     fields,
-				outputPath: outputPath,
-			}
-			// Atomically increase the queriesDone counter and update metric.
-			atomic.AddInt32(&exporter.queriesDone, 1)
-			queryProcessedMetric.WithLabelValues(config.Table).Inc()
+
+		// Send a new QueryJob to the channel.
+		exporter.queryJobs <- &QueryJob{
+			name:       config.Table,
+			query:      buf.String(),
+			fields:     fields,
+			outputPath: outputPath,
 		}
+		// Atomically increase the queriesDone counter and update metric.
+		atomic.AddInt32(&exporter.queriesDone, 1)
+		queryProcessedMetric.WithLabelValues(config.Table).Inc()
 	}
-	// The goroutines' termination is controlled by closing the channels they
-	// work on. The fist WaitGroup makes sure all the query workers have been
-	// terminated before terminating the upload workers. The second one makes
-	// sure all the upload workers have been terminated before returning.
-	close(exporter.queryJobs)
-	queryWg.Wait()
-	close(exporter.uploadJobs)
-	uploadWg.Wait()
 	return nil
 }
 
@@ -288,6 +294,10 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 	defer wg.Done()
 
 	for j := range exporter.queryJobs {
+		// If the context has been canceled, stop processing jobs.
+		if ctx.Err() != nil {
+			return
+		}
 		// Run the SELECT query to get histogram data.
 		log.Printf("Running query: %s", j.query)
 		q := exporter.bqClient.Query(j.query)
@@ -406,6 +416,10 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context, wg *sync.WaitGro
 	defer wg.Done()
 
 	for j := range exporter.uploadJobs {
+		// If the context has been canceled, stop processing jobs.
+		if ctx.Err() != nil {
+			return
+		}
 		// The uploadQueue counter is decremented before starting to upload
 		// the file, so that in-flight uploads aren't counted.
 		// After this, we observe the size of the upload queue and put its
