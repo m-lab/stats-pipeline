@@ -41,7 +41,14 @@ func (f *AnnotationQueryFormatter) Partitions(source string) string {
 // Where returns a bigquery "WHERE" clause based on a row returned by running
 // the Partitions() query. The Annotation formatter conditions searches on the Date.
 func (f *AnnotationQueryFormatter) Where(row map[string]bigquery.Value) string {
-	partition := row["date"].(civil.Date)
+	date, ok := row["date"]
+	if !ok {
+		return "WHERE TRUE" // a noop expression.
+	}
+	partition, ok := date.(civil.Date)
+	if !ok {
+		return "WHERE TRUE" // a noop expression.
+	}
 	return fmt.Sprintf("WHERE %s = DATE('%d-%02d-%02d')", f.DateExpr, partition.Year, int(partition.Month), partition.Day)
 
 }

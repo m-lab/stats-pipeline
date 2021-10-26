@@ -80,6 +80,20 @@ func TestAnnotationQueryFormatter_Where(t *testing.T) {
 			},
 			want: "WHERE DATE(TestTime) = DATE('2020-06-01')",
 		},
+		{
+			name: "error-missing-date",
+			row: map[string]bigquery.Value{
+				"missing_date": 10,
+			},
+			want: "WHERE TRUE",
+		},
+		{
+			name: "error-date-wrong-type",
+			row: map[string]bigquery.Value{
+				"date": time.Date(2020, time.June, 01, 0, 0, 0, 0, time.UTC),
+			},
+			want: "WHERE TRUE",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
