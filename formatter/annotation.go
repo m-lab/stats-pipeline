@@ -54,7 +54,7 @@ func (f *AnnotationQueryFormatter) Where(row map[string]bigquery.Value) string {
 }
 
 // Marshal converts an export query row into a byte result suitable for writing
-// to disk. For annottion export, the format is marshalled to annotation.Annotations and then to JSON.
+// to disk. For annotation export, the format is marshalled to annotation.Annotations and then to JSON.
 func (f *AnnotationQueryFormatter) Marshal(rows []map[string]bigquery.Value) ([]byte, error) {
 	if len(rows) == 0 {
 		return nil, errors.New("zero length record")
