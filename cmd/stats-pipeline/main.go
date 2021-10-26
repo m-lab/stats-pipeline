@@ -91,7 +91,7 @@ func main() {
 	case "stats":
 		f = formatter.NewStatsQueryFormatter()
 	case "annotation":
-		panic("TODO(soltesz): implement annotation formatter")
+		f = formatter.NewTCPINFOAnnotationQueryFormatter()
 	case "hopannotation1":
 		panic("TODO: implement hopannotation1 formatter")
 	}
