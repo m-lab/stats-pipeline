@@ -13,14 +13,16 @@ There are three "volumes" of interest:
 
 - `shared:/var/spool/ndt` - this is shared between the two containers,
   stats-pipeline writes files, and the pusher archives, uploads, and removes them.
-- `/Users/soltesz/.config/gcloud/:/root/.config/gcloud` - this provides access
+- `$HOME/.config/gcloud/:/root/.config/gcloud` - this provides access
   to your gcloud credentials. You must update the directory to your local home
   path.
-- `/Users/soltesz/src/github.com/m-lab/stats-pipeline:/config` - this provides
-  access to the configuration and BigQuery SQL files in this repo.
+- `./:/config` - this provides access to the configuration and BigQuery SQL
+  files in this repo.
 
-After updating the docker compose file to refer to your local home directories,
-you may run a local instance of the annotation export stats pipeline using
+NOTE: Depending on your version of docker-compose, you may need to replace
+`$HOME` with your actual local directory name.
+
+You may run a local instance of the annotation export stats pipeline using
 docker-compose:
 
 ```sh
