@@ -1,6 +1,6 @@
 # This query computes client
 # To invoke from command line:
-# bq query --use_legacy_sql=false --parameter='startdate:DATE:2021-07-15' --parameter='enddate:DATE:2021-09-13' --destination_table='mlab-sandbox:statistics.gfr_stats2' --time_partitioning_type=DAY --time_partitioning_field=test_date --replace  < statistics/queries/canary_incorp_numbered.sql
+# bq query --use_legacy_sql=false --parameter='startdate:DATE:2021-07-01' --parameter='enddate:DATE:2021-09-30' --destination_table='mlab-sandbox:statistics.gfr_stats2' --time_partitioning_type=DAY --time_partitioning_field=test_date --replace  < statistics/queries/canary_incorp_numbered.sql
 
 # TODO - identify slow and far clients, instead of individual tests.
 # Otherwise, we are filtering out potentially important outlier tests, instead of weird clients.
@@ -10,7 +10,7 @@
 # and documented in a blog post.  This query will be updated at that time to use the public view.
 #
 # This decorates all NDT7 tests with additional fields:
-#  1. A synthetic ClientID
+#  1. A synthetic endpointHash
 #  2. Top level ServerMeasurements (either Upload or Download)
 #  3. NDTVersion, isDownload
 #  4. Additional fields in the client struct: Name, OS, Arch, Version, Library, LibraryVersion
@@ -53,13 +53,17 @@ WITH all_tests AS (
   FROM `measurement-lab.ndt.ndt7`
 ),
 
+# This add sequential numbers for each endpointHash/date, for all tests on each machine, site, and metro.
+# TODO - consider adding an additional random distinction between endpoints where WScale = 0x78, and other hot WScale values.
+#   Ideally, this would more accurately weight the tests from the larger number of true endpoints aggregated in each Wscale value.
+#   Unfortunately, this might separate tests from the same true endpoint, which is not what we really want.
 numbered_ndt7 AS (
 SELECT *,
-  # This is an experimental ClientID, intended for exploration of how well it functions as a substitute for ClientIP.
+  # This is an experimental endpointHash, intended for exploration of how well it functions as a substitute for ClientIP.
   FORMAT("%16X",FARM_FINGERPRINT(FORMAT("%s_%s_%s_%s_%s_%s_%s_%02x",
     IFNULL(raw.ClientIP,"none"), IFNULL(client.Name,"none"), IFNULL(client.OS,"none"),
     IFNULL(client.Arch, "none"), IFNULL(client.Version, "none"), IFNULL(client.Library, "none"), IFNULL(client.LibraryVersion, "none"),
-    IFNULL(ServerMeasurements[SAFE_OFFSET(0)].TCPInfo.wscale,-1)))) AS ClientID,
+    IFNULL(ServerMeasurements[SAFE_OFFSET(0)].TCPInfo.wscale,-1)))) AS endpointHash,
   # This is a copy of the last snapshot, to make it more easily accessible, independent of whether it is an Upload or Download
   ServerMeasurements[SAFE_ORDINAL(ARRAY_LENGTH(ServerMeasurements))] AS lastSnapshot,
   # This may be a more useful elapsedTime measurement, since it reflects the available measurements.
@@ -86,15 +90,19 @@ WINDOW
 ),
 ------------------------------------------------------------------------
 
+# Exclude tests from our monitoring systems.
 tests AS (
   SELECT * EXCEPT(a), a.* FROM numbered_ndt7
   WHERE NOT client.isMonitoring
 ),
 
+# Choose just the first one or two samples, per machine, from each client.
+# This will over-represent hot clients, but not as badly as not doing this.
 subset AS (
 SELECT
-  date AS test_date, TestTime, server.metro, server.site, server.machine, Client, Server,
-  ClientID,
+  date AS test_date, 
+  TestTime, server.metro, server.site, server.machine, Client, Server,
+  endpointHash,
   NDTVersion,
   UUID,
   CongestionControl AS cc,
@@ -105,9 +113,13 @@ SELECT
   elapsedTime,
   MeanThroughputMbps <= 0.1 AS slow,
   elapsedTime BETWEEN 7 AND 10.1 AS complete, # Only filters out slower tests Using elapsedTime from tcpinfo snapshot
-  IF(NDTVersion LIKE "%canary%", (siteCount > 3 OR metroCount > 9), (siteCount > 6 OR metroCount > 18)) AS isHot,
+  # Add an additional label to indicate if clients are hotter than three tests per site per day.
+  # (Two from prod, and one from canary)
+  # Ideally, this should be done based on weekly statistics, but this is an acceptible proxy for now.
+  IF(NDTVersion LIKE "%canary%", (siteCount > 1 OR metroCount > 3), (siteCount > 2 OR metroCount > 6)) AS isHot,
 FROM tests
 WHERE isDownload
+  # This may not be helping much for cold clients, but limits the representation of hot clients (isHot = true).
   AND (machineSample = 1 # only allow one sample per day per client/machine.
     OR (machineSample = 2 AND client.WScale = 0x78)) # Allow two samples per machine from 0x78 clients.
 ),
@@ -123,7 +135,8 @@ client.Name AS clientName,
 client.OS AS clientOS,
 isHot AS clientIsHot,
 FORMAT("%02X", client.WScale) AS clientWScale,
-NDTVersion, complete, slow, COUNT(DISTINCT ClientID) AS clients, count(uuid) AS tests, 
+# TODO - replace clients with endpoints, here and in grafana queries.
+NDTVersion, complete, slow, COUNT(DISTINCT endpointHash) AS clients, count(uuid) AS tests, 
 ROUND(EXP(AVG(IF(mbps > 0, LN(mbps), NULL))),2) AS log_mean_speed, 
 # ndt7 has only TCPINFO MinRTT, and reports in microseconds??  Using MinRTT instead of appMinRTT here and below
 # ndt5 was reporting in nanoseconds??
@@ -136,7 +149,6 @@ AVG(LossRate) AS AvgLossRate,
 # Pearson correlation between ln(minRTT) and ln(bandwidth).  Ln produces much higher correlation (.5 vs .3)
 # suggesting that the long tail of high speed / low RTT undermines the correlation without the LOG.
 ROUND(CORR(IF(MinRTT > 0, LN(1/MinRTT), NULL) , IF(mbps > 0, LN(mbps), NULL)), 3) AS pearson,
---ROUND(AVG(SAFE_DIVIDE(SumRTT,CountRTT))/1000000,2) AS meanAppAvgRTT,
 ROUND(APPROX_QUANTILES(mbps, 101)[OFFSET(10)],2) AS q10,
 ROUND(APPROX_QUANTILES(mbps, 101)[OFFSET(25)],2) AS q25,
 ROUND(APPROX_QUANTILES(mbps, 101)[OFFSET(50)],2) AS q50,
