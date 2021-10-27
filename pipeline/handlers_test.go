@@ -25,7 +25,7 @@ type mockExporter struct{}
 
 type mockHistogramTable struct{}
 
-func (ex *mockExporter) Export(context.Context, config.Config, *template.Template, string) error {
+func (ex *mockExporter) Export(context.Context, config.Config, *template.Template, int) error {
 	return nil
 }
 
@@ -66,7 +66,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			exporter: me,
 			config:   conf,
 			r: httptest.NewRequest(http.MethodPost,
-				"/v0/pipeline?year=2020&step=all", bytes.NewReader([]byte{})),
+				"/v0/pipeline?start=2021-01-01&end=2021-12-31&step=all",
+				bytes.NewReader([]byte{})),
 			statusCode: http.StatusOK,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{histogramsStep, exportsStep},
@@ -86,32 +87,87 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			},
 		},
 		{
-			name: "missing-parameter-year",
-			r: httptest.NewRequest(http.MethodPost, "/v0/pipeline",
+			name: "missing-parameter-start",
+			r: httptest.NewRequest(http.MethodPost, "/v0/pipeline?end=2021-12-31&step=all",
 				nil),
 			statusCode: http.StatusBadRequest,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{},
-				Errors:         []string{errMissingYear},
+				Errors:         []string{errMissingStartDate.Error()},
+			},
+		},
+		{
+			name: "missing-parameter-end",
+			r: httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2021-01-01&step=all",
+				nil),
+			statusCode: http.StatusBadRequest,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{},
+				Errors:         []string{errMissingEndDate.Error()},
 			},
 		},
 		{
 			name: "missing-parameter-step",
 			r: httptest.NewRequest(http.MethodPost,
-				"/v0/pipeline?year=2020", nil),
+				"/v0/pipeline?start=2021-01-01&end=2021-12-31", nil),
 			statusCode: http.StatusBadRequest,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{},
-				Errors:         []string{errMissingStep},
+				Errors:         []string{errMissingStep.Error()},
 			},
 		},
 		{
-			name:       "action-histogram",
-			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?year=2020&step=histograms", bytes.NewReader([]byte{})),
+			name:       "action-histograms",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2021-01-01&end=2021-12-31&step=histograms", bytes.NewReader([]byte{})),
 			statusCode: http.StatusOK,
 			response: &pipelineResult{
 				CompletedSteps: []pipelineStep{histogramsStep},
 				Errors:         []string{},
+			},
+		},
+		{
+			name:       "action-exports",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2021-01-01&end=2021-12-31&step=exports", bytes.NewReader([]byte{})),
+			statusCode: http.StatusOK,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{exportsStep},
+				Errors:         []string{},
+			},
+		},
+		{
+			name:       "action-all",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2021-01-01&end=2021-12-31&step=all", bytes.NewReader([]byte{})),
+			statusCode: http.StatusOK,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{histogramsStep, exportsStep},
+				Errors:         []string{},
+			},
+		},
+		{
+			name:       "invalid-start",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=xyz&end=2021-12-31&step=all", bytes.NewReader([]byte{})),
+			statusCode: http.StatusBadRequest,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{},
+				Errors:         []string{"parsing time \"xyz\" as \"2006-01-02\": cannot parse \"xyz\" as \"2006\""},
+			},
+		},
+		{
+			name:       "invalid-end",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2021-01-01&end=xyz&step=all", bytes.NewReader([]byte{})),
+			statusCode: http.StatusBadRequest,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{},
+				Errors:         []string{"parsing time \"xyz\" as \"2006-01-02\": cannot parse \"xyz\" as \"2006\""},
+			},
+		},
+		{
+			name:       "invalid-range-start-after-end",
+			r:          httptest.NewRequest(http.MethodPost, "/v0/pipeline?start=2021-01-01&end=2020-12-31&step=all", bytes.NewReader([]byte{})),
+			statusCode: http.StatusBadRequest,
+			response: &pipelineResult{
+				CompletedSteps: []pipelineStep{},
+				Errors:         []string{errInvalidDateRange.Error()},
 			},
 		},
 	}
@@ -152,7 +208,7 @@ func TestNewHandler(t *testing.T) {
 	config := map[string]config.Config{}
 	h := NewHandler(mc, me, config)
 	if h == nil {
-		t.Errorf("NewHandler() returned nil")
+		t.Fatalf("NewHandler() returned nil")
 	}
 	if h.bqClient != mc || h.exporter != me || !reflect.DeepEqual(h.configs, config) {
 		t.Errorf("NewHandler() didn't return the expected handler")
@@ -160,5 +216,67 @@ func TestNewHandler(t *testing.T) {
 	// Check we can read from the channel.
 	if _, ok := <-h.pipelineCanRun; !ok {
 		t.Errorf("NewHandler() didn't return a properly initialized handler.")
+	}
+}
+
+func Test_getYearlyRanges(t *testing.T) {
+	tests := []struct {
+		name  string
+		start time.Time
+		end   time.Time
+		want  [][]time.Time
+	}{
+		{
+			name:  "single-year",
+			start: time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC),
+			end:   time.Date(2021, time.December, 31, 0, 0, 0, 0, time.UTC),
+			want: [][]time.Time{
+				{
+					time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2021, time.December, 31, 0, 0, 0, 0, time.UTC),
+				},
+			},
+		},
+		{
+			name:  "two-adjacent-years",
+			start: time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+			end:   time.Date(2021, time.August, 31, 0, 0, 0, 0, time.UTC),
+			want: [][]time.Time{
+				{
+					time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2020, time.December, 31, 0, 0, 0, 0, time.UTC),
+				},
+				{
+					time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2021, time.August, 31, 0, 0, 0, 0, time.UTC),
+				},
+			},
+		},
+		{
+			name:  "multiple-years",
+			start: time.Date(2020, time.March, 1, 0, 0, 0, 0, time.UTC),
+			end:   time.Date(2022, time.August, 31, 0, 0, 0, 0, time.UTC),
+			want: [][]time.Time{
+				{
+					time.Date(2020, time.March, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2020, time.December, 31, 0, 0, 0, 0, time.UTC),
+				},
+				{
+					time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2021, time.December, 31, 0, 0, 0, 0, time.UTC),
+				},
+				{
+					time.Date(2022, time.January, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2022, time.August, 31, 0, 0, 0, 0, time.UTC),
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := getYearlyRanges(tt.start, tt.end); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getYearlyRanges() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

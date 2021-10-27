@@ -7,7 +7,6 @@ import (
 	"flag"
 	"log"
 	"regexp"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"text/template"
@@ -177,7 +176,7 @@ type Formatter interface {
 // Note: config.OutputPath should not start with a "/".
 func (exporter *JSONExporter) Export(ctx context.Context,
 	config config.Config, queryTpl *template.Template,
-	year string) error {
+	year int) error {
 
 	// Retrieve list of fields from the output path template string.
 	fields, err := getFieldsFromPath(config.OutputPath)
@@ -192,14 +191,8 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 		return err
 	}
 
-	// TODO(soltesz): Remove when year parameter is an int.
-	yeari, err := strconv.Atoi(year)
-	if err != nil {
-		return err
-	}
-
 	// The fully qualified name for a table is project.dataset.table_year.
-	sourceTable := exporter.format.Source(exporter.projectID, config, yeari)
+	sourceTable := exporter.format.Source(exporter.projectID, config, year)
 
 	// Generate WHERE clauses to shard the export query.
 	clauses, err := exporter.getPartitionFilters(ctx, sourceTable)
@@ -247,7 +240,25 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 		go exporter.uploadWorker(ctx, &uploadWg)
 	}
 
+	// The goroutines' termination is controlled by closing the channels they
+	// work on. The fist WaitGroup makes sure all the query workers have been
+	// terminated before terminating the upload workers. The second one makes
+	// sure all the upload workers have been terminated before returning.
+	// This makes sure close/wait are always called, and in the right order.
+	defer func() {
+		close(exporter.queryJobs)
+		queryWg.Wait()
+		close(exporter.uploadJobs)
+		uploadWg.Wait()
+		close(exporter.results)
+	}()
+
 	for _, v := range clauses {
+		// If the context has been canceled, stop sending jobs.
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
 		// Execute the query template and send the query to one of the
 		// available queryWorker functions.
 		var buf bytes.Buffer
@@ -259,30 +270,18 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 			log.Print(err)
 			break
 		}
-		select {
-		case <-ctx.Done():
-			// If the context has been closed, we stop writing to the channel.
-			break
-		default:
-			exporter.queryJobs <- &QueryJob{
-				name:       config.Table,
-				query:      buf.String(),
-				fields:     fields,
-				outputPath: outputPath,
-			}
-			// Atomically increase the queriesDone counter and update metric.
-			atomic.AddInt32(&exporter.queriesDone, 1)
-			queryProcessedMetric.WithLabelValues(config.Table).Inc()
+
+		// Send a new QueryJob to the channel.
+		exporter.queryJobs <- &QueryJob{
+			name:       config.Table,
+			query:      buf.String(),
+			fields:     fields,
+			outputPath: outputPath,
 		}
+		// Atomically increase the queriesDone counter and update metric.
+		atomic.AddInt32(&exporter.queriesDone, 1)
+		queryProcessedMetric.WithLabelValues(config.Table).Inc()
 	}
-	// The goroutines' termination is controlled by closing the channels they
-	// work on. The fist WaitGroup makes sure all the query workers have been
-	// terminated before terminating the upload workers. The second one makes
-	// sure all the upload workers have been terminated before returning.
-	close(exporter.queryJobs)
-	queryWg.Wait()
-	close(exporter.uploadJobs)
-	uploadWg.Wait()
 	return nil
 }
 
