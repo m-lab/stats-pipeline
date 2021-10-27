@@ -294,10 +294,6 @@ func (exporter *JSONExporter) queryWorker(ctx context.Context,
 	defer wg.Done()
 
 	for j := range exporter.queryJobs {
-		// If the context has been canceled, stop processing jobs.
-		if ctx.Err() != nil {
-			return
-		}
 		// Run the SELECT query to get histogram data.
 		log.Printf("Running query: %s", j.query)
 		q := exporter.bqClient.Query(j.query)
@@ -416,10 +412,6 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context, wg *sync.WaitGro
 	defer wg.Done()
 
 	for j := range exporter.uploadJobs {
-		// If the context has been canceled, stop processing jobs.
-		if ctx.Err() != nil {
-			return
-		}
 		// The uploadQueue counter is decremented before starting to upload
 		// the file, so that in-flight uploads aren't counted.
 		// After this, we observe the size of the upload queue and put its
