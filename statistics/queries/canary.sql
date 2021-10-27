@@ -135,8 +135,8 @@ client.Name AS clientName,
 client.OS AS clientOS,
 isHot AS clientIsHot,
 FORMAT("%02X", client.WScale) AS clientWScale,
-# TODO - replace clients with endpoints, here and in grafana queries.
-NDTVersion, complete, slow, COUNT(DISTINCT endpointHash) AS clients, count(uuid) AS tests, 
+# TODO - replace clients with endpoints in grafana queries, then delete clients column.
+NDTVersion, complete, slow, COUNT(DISTINCT endpointHash) AS clients, COUNT(DISTINCT endpointHash) AS endpoints, count(uuid) AS tests, 
 ROUND(EXP(AVG(IF(mbps > 0, LN(mbps), NULL))),2) AS log_mean_speed, 
 # ndt7 has only TCPINFO MinRTT, and reports in microseconds??  Using MinRTT instead of appMinRTT here and below
 # ndt5 was reporting in nanoseconds??
