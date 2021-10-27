@@ -35,6 +35,15 @@ mlab-sandbox. Those files don't matter b/c it's sandbox, but be careful to
 distinguish between new files created from your run and archives from previous
 runs.
 
+You may trigger the export process using:
+
+```sh
+curl -XPOST --data {} 'http://localhost:8080/v0/pipeline?step=exports&year=1'
+```
+
+Only the 'export' step is supported for annotation export, and the year is
+required but ignored.
+
 ## Kubernetes
 
 TODO(soltesz): add notes for kubernetes configuration/deployment.
