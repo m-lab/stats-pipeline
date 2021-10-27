@@ -9,8 +9,8 @@ services:
     image: local-stats-pipeline
     volumes:
       - shared:/var/spool/ndt
-      - /Users/soltesz/.config/gcloud/:/root/.config/gcloud
-      - /Users/soltesz/src/github.com/m-lab/stats-pipeline:/config
+      - $HOME/.config/gcloud/:/root/.config/gcloud
+      - ./:/config
     ports:
       - target: 8080
         published: 8080
@@ -37,7 +37,7 @@ services:
     image: measurementlab/pusher:v1.19
     volumes:
       - shared:/var/spool/ndt
-      - /Users/soltesz/.config/gcloud/:/root/.config/gcloud
+      - $HOME/.config/gcloud/:/root/.config/gcloud
     network_mode: "service:annotation_export"
     command:
       - -prometheusx.listen-address=:9991
