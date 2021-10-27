@@ -72,15 +72,19 @@ SELECT *,
   # This assigns sample sequence numbers to each sample for a client on a machine.
   # The xxxCount can be used in a MOD function to choose samples other than Sample = 1
   ROW_NUMBER() OVER machineOrder AS machineSample, 
-  COUNT(*) OVER machinePart AS machineCount, #(PARTITION BY date, server.Site, server.Machine, raw.ClientIP, client.Name, client.OS, client.Version, client.Arch, client.Library, client.LibraryVersion, ServerMeasurements[SAFE_OFFSET(0)].TCPInfo.wscale, NDTVersion, isDownload) AS machineCount,
+  COUNT(*) OVER machinePart AS machineCount,
   ROW_NUMBER() OVER siteOrder AS siteSample,
-  COUNT(*) OVER sitePart AS siteCount, #(PARTITION BY date, server.Site, raw.ClientIP, client.Name, client.OS, client.Version, client.Arch, client.Library, client.LibraryVersion, ServerMeasurements[SAFE_OFFSET(0)].TCPInfo.wscale, NDTVersion, isDownload) AS siteCount,
+  COUNT(*) OVER sitePart AS siteCount,
   ROW_NUMBER() OVER metroOrder AS metroSample, 
-  COUNT(*) OVER metroPart AS metroCount, #(PARTITION BY date, server.Metro, raw.ClientIP, client.Name, client.OS, client.Version, client.Arch, client.Library, client.LibraryVersion, ServerMeasurements[SAFE_OFFSET(0)].TCPInfo.wscale, NDTVersion, isDownload) AS metroCount,
+  COUNT(*) OVER metroPart AS metroCount,
 FROM all_tests
 WINDOW
-  # Add random test numbers, per client/day, for uploads and downloads separately, and separately for each NDTVersion
-  # These are ordered by ARRAY_LENGTH(ServerMeasurements) DESC to prefer longer tests.
+  # Add random test numbers, per client/day, for uploads and downloads separately,
+  #   and separately for each NDTVersion. These are ordered by 
+  #   ARRAY_LENGTH(ServerMeasurements) DESC to prefer longer tests.
+  # It would be best if the xxxCount values were based on the entire endpoint,
+  #   but we also want to be able to take proportional samples from the different
+  #   NDTVersion values.
   machinePart AS (PARTITION BY date, server.Site, server.Machine, raw.ClientIP, client.Name, client.OS, client.Version, client.Arch, client.Library, client.LibraryVersion, ServerMeasurements[SAFE_OFFSET(0)].TCPInfo.wscale, NDTVersion, isDownload),
   machineOrder AS (machinePart ORDER BY ARRAY_LENGTH(ServerMeasurements) DESC, FARM_FINGERPRINT(ID)),
   sitePart AS (PARTITION BY date, server.Site, raw.ClientIP, client.Name, client.OS, client.Version, client.Arch, client.Library, client.LibraryVersion, ServerMeasurements[SAFE_OFFSET(0)].TCPInfo.wscale, NDTVersion, isDownload),
@@ -92,12 +96,21 @@ WINDOW
 
 # Exclude tests from our monitoring systems.
 tests AS (
-  SELECT * EXCEPT(a), a.* FROM numbered_ndt7
+  SELECT * EXCEPT(a), a.*,
+    # Instead of distinct date, it would be better to use DATE_DIFF?
+    (COUNT(*) OVER metroClientAndType)/(COUNT(DISTINCT date) OVER metroAndType) AS metroFrequency,
+  FROM numbered_ndt7
   WHERE NOT client.isMonitoring
+    # This is not ideal, but allows a range of dates for computing the metro wide daily test rate.
+    # Consider changing to use a date range in the partition, from a week prior to the active date.
+    AND date BETWEEN @startdate AND @enddate
+  WINDOW 
+    metroClientAndType AS (PARTITION BY Server.metro, endpointHash, isDownload),
+    metroAndType AS (PARTITION BY Server.metro, isDownload)
 ),
 
 # Choose just the first one or two samples, per machine, from each client.
-# This will over-represent hot clients, but not as badly as not doing this.
+# A separate clientIsHot is later provided to allow filtering of hot clients.
 subset AS (
 SELECT
   date AS test_date, 
@@ -116,7 +129,8 @@ SELECT
   # Add an additional label to indicate if clients are hotter than three tests per site per day.
   # (Two from prod, and one from canary)
   # Ideally, this should be done based on weekly statistics, but this is an acceptible proxy for now.
-  IF(NDTVersion LIKE "%canary%", (siteCount > 1 OR metroCount > 3), (siteCount > 2 OR metroCount > 6)) AS isHot,
+  # IF(NDTVersion LIKE "%canary%", (siteCount > 1 OR metroCount > 3), (siteCount > 2 OR metroCount > 6)) AS isHot,
+  metroFrequency > 9 AS isHot,
 FROM tests
 WHERE isDownload
   # This may not be helping much for cold clients, but limits the representation of hot clients (isHot = true).
