@@ -11,19 +11,30 @@
 -- This export query may be safely run multiple times *IF* the previously
 -- generated annotations have been copied to the ndt/annotation GCS location and
 -- parsed into the raw_ndt.annotation tables.
+--
+-- The query uses the "Left Excluding JOIN" pattern to select only rows from
+-- TCPINFO *without* corresponding rows in the annotation table (i.e.
+-- "annotation.id IS NULL"). This allows the query to filter on date partitions
+-- which makes the query more efficient than a global search.
 SELECT
-    UUID,
-    MIN(TestTime) as Timestamp,
-    ANY_VALUE(ServerX) as Server,
-    ANY_VALUE(ClientX) as Client,
-    REPLACE(CAST(DATE(TestTime) AS STRING), "-", "/") as year_month_day,
-FROM `mlab-oti.base_tables.tcpinfo`
+    tcpinfo.UUID,
+    MIN(tcpinfo.TestTime) as Timestamp,
+    ANY_VALUE(tcpinfo.ServerX) as Server,
+    ANY_VALUE(tcpinfo.ClientX) as Client,
+    REPLACE(CAST(DATE(tcpinfo.TestTime) AS STRING), "-", "/") as year_month_day,
+FROM
+    `mlab-oti.base_tables.tcpinfo` AS tcpinfo
+LEFT OUTER JOIN
+    `mlab-oti.raw_ndt.annotation` AS annotation
+ON
+        tcpinfo.UUID = annotation.id
+    AND DATE(tcpinfo.TestTime) = annotation.date
 {{ .whereClause }}
-    AND UUID != "" AND UUID is not NULL AND UUID NOT IN (
-        SELECT id FROM `mlab-oti.raw_ndt.annotation`
-    )
-    AND ServerX.Site != ""
-    AND ServerX.Geo is not NULL
+    AND annotation.id IS NULL
+    AND tcpinfo.UUID != ""
+    AND tcpinfo.UUID is not NULL
+    AND tcpinfo.ServerX.Site != ""
+    AND tcpinfo.ServerX.Geo is not NULL
 GROUP BY
     UUID,
     year_month_day
