@@ -49,7 +49,11 @@ func (f *AnnotationQueryFormatter) Where(row map[string]bigquery.Value) string {
 	if !ok {
 		return "WHERE TRUE" // a noop expression.
 	}
-	return fmt.Sprintf("WHERE %s = DATE('%d-%02d-%02d')", f.DateExpr, partition.Year, int(partition.Month), partition.Day)
+	ds := fmt.Sprintf("%d-%02d-%02d", partition.Year, int(partition.Month), partition.Day)
+	template := `WHERE %s = DATE('%s') AND DATE('%s') BETWEEN
+            DATE_SUB(DATE(_PARTITIONTIME), INTERVAL 1 DAY)
+        AND DATE_ADD(DATE(_PARTITIONTIME), INTERVAL 1 DAY)`
+	return fmt.Sprintf(template, f.DateExpr, ds, ds)
 
 }
 
