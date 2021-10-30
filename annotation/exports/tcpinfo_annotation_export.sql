@@ -14,8 +14,10 @@
 --
 -- The query uses the "Left Excluding JOIN" pattern to select only rows from
 -- TCPINFO *without* corresponding rows in the annotation table (i.e.
--- "annotation.id IS NULL"). This allows the query to filter on date partitions
--- which makes the query more efficient than a global search.
+-- "annotation.id IS NULL").
+--
+-- TODO(soltesz): Allows the query to filter on annotation date partitions
+-- to make the query more efficient than a global search.
 SELECT
     tcpinfo.UUID,
     MIN(tcpinfo.TestTime) as Timestamp,
