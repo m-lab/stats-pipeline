@@ -27,7 +27,7 @@ WITH annotations AS (
     FROM `mlab-oti.base_tables.tcpinfo`
     WHERE DATE(TestTime) = DATE('{{ .partitionID }}')
       AND DATE('{{ .partitionID }}') BETWEEN
-	      DATE_SUB(DATE(_PARTITIONTIME), INTERVAL 1 DAY)
+          DATE_SUB(DATE(_PARTITIONTIME), INTERVAL 1 DAY)
       AND DATE_ADD(DATE(_PARTITIONTIME), INTERVAL 1 DAY)
 )
 
