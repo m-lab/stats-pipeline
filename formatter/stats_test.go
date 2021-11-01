@@ -76,6 +76,20 @@ func TestStatsQueryFormatter_Partition(t *testing.T) {
 			},
 			want: "1234",
 		},
+		{
+			name: "error-missing-date",
+			row: map[string]bigquery.Value{
+				"missing_shard": 10,
+			},
+			want: "-1",
+		},
+		{
+			name: "error-date-wrong-type",
+			row: map[string]bigquery.Value{
+				"shard": float64(1.3),
+			},
+			want: "-1",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
