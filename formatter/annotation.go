@@ -38,8 +38,9 @@ func (f *AnnotationQueryFormatter) Partitions(source string) string {
          ORDER BY date`, f.DateExpr, source, f.DateExpr)
 }
 
-// Where returns a bigquery "WHERE" clause based on a row returned by running
-// the Partitions() query. The Annotation formatter conditions searches on the Date.
+// Partition returns a date partition id based on a row returned by running the
+// Partitions() query. The partition id can be used in query templates.  The
+// Annotation formatter conditions searches on the Date.
 func (f *AnnotationQueryFormatter) Partition(row map[string]bigquery.Value) string {
 	date, ok := row["date"]
 	if !ok {
