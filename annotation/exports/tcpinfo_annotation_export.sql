@@ -14,10 +14,23 @@
 --
 -- The query uses the "Left Excluding JOIN" pattern to select only rows from
 -- TCPINFO *without* corresponding rows in the annotation table (i.e.
--- "annotation.id IS NULL").
---
--- TODO(soltesz): Allows the query to filter on annotation date partitions
--- to make the query more efficient than a global search.
+-- "annotation.id IS NULL"). Both tcpinfo and annotation tables are filtered by
+-- partition dates.
+WITH annotations AS (
+    SELECT *
+    FROM `mlab-oti.raw_ndt.annotation`
+    WHERE date BETWEEN
+          DATE_SUB(DATE('{{ .partitionID }}'), INTERVAL 1 DAY)
+      AND DATE_ADD(DATE('{{ .partitionID }}'), INTERVAL 1 DAY)
+), tcpinfos AS (
+    SELECT *
+    FROM `mlab-oti.base_tables.tcpinfo`
+    WHERE DATE(TestTime) = DATE('{{ .partitionID }}')
+      AND DATE('{{ .partitionID }}') BETWEEN
+	      DATE_SUB(DATE(_PARTITIONTIME), INTERVAL 1 DAY)
+      AND DATE_ADD(DATE(_PARTITIONTIME), INTERVAL 1 DAY)
+)
+
 SELECT
     tcpinfo.UUID,
     MIN(tcpinfo.TestTime) as Timestamp,
@@ -25,14 +38,14 @@ SELECT
     ANY_VALUE(tcpinfo.ClientX) as Client,
     REPLACE(CAST(DATE(tcpinfo.TestTime) AS STRING), "-", "/") as year_month_day,
 FROM
-    `mlab-oti.base_tables.tcpinfo` AS tcpinfo
+    tcpinfos AS tcpinfo
 LEFT OUTER JOIN
-    `mlab-oti.raw_ndt.annotation` AS annotation
+    annotations as annotation
 ON
         tcpinfo.UUID = annotation.id
     AND DATE(tcpinfo.TestTime) = annotation.date
-{{ .whereClause }}
-    AND annotation.id IS NULL
+WHERE
+        annotation.id IS NULL
     AND tcpinfo.UUID != ""
     AND tcpinfo.UUID is not NULL
     AND tcpinfo.ServerX.Site != ""
