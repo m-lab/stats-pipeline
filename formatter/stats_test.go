@@ -63,7 +63,7 @@ func TestStatsQueryFormatter_Partitions(t *testing.T) {
 	}
 }
 
-func TestStatsQueryFormatter_Where(t *testing.T) {
+func TestStatsQueryFormatter_Partition(t *testing.T) {
 	tests := []struct {
 		name string
 		row  map[string]bigquery.Value
@@ -74,14 +74,28 @@ func TestStatsQueryFormatter_Where(t *testing.T) {
 			row: map[string]bigquery.Value{
 				"shard": int64(1234),
 			},
-			want: "WHERE shard = 1234",
+			want: "1234",
+		},
+		{
+			name: "error-missing-date",
+			row: map[string]bigquery.Value{
+				"missing_shard": 10,
+			},
+			want: "-1",
+		},
+		{
+			name: "error-date-wrong-type",
+			row: map[string]bigquery.Value{
+				"shard": float64(1.3),
+			},
+			want: "-1",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := NewStatsQueryFormatter()
-			if got := f.Where(tt.row); got != tt.want {
-				t.Errorf("StatsQueryFormatter.Where() = %v, want %v", got, tt.want)
+			if got := f.Partition(tt.row); got != tt.want {
+				t.Errorf("StatsQueryFormatter.Partition() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -33,11 +33,18 @@ func (f *StatsQueryFormatter) Partitions(source string) string {
 		ORDER BY COUNT(*) DESC`, source)
 }
 
-// Where returns a bigquery "WHERE" clause based on a row returned by running
-// the Partitions() query.
-func (f *StatsQueryFormatter) Where(row map[string]bigquery.Value) string {
-	partition := row["shard"].(int64)
-	return fmt.Sprintf("WHERE shard = %d", partition)
+// Partition returns a shard partition id based on a row returned by running the
+// Partitions() query. The partition id can be used in query templates.
+func (f *StatsQueryFormatter) Partition(row map[string]bigquery.Value) string {
+	shard, ok := row["shard"]
+	if !ok {
+		return "-1" // a noop expression.
+	}
+	partition, ok := shard.(int64)
+	if !ok {
+		return "-1" // a noop expression.
+	}
+	return fmt.Sprintf("%d", partition)
 }
 
 // Marshal converts an export query row into a byte result suitable for writing
