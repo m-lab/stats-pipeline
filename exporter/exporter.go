@@ -153,7 +153,7 @@ func New(bqClient bqiface.Client, projectID string, output Writer, format Format
 type Formatter interface {
 	Source(project string, config config.Config, year int) string
 	Partitions(source string) string
-	Where(row map[string]bigquery.Value) string
+	Partition(row map[string]bigquery.Value) string
 	Marshal(rows []map[string]bigquery.Value) ([]byte, error)
 }
 
@@ -195,7 +195,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 	sourceTable := exporter.format.Source(exporter.projectID, config, year)
 
 	// Generate WHERE clauses to shard the export query.
-	clauses, err := exporter.getPartitionFilters(ctx, sourceTable)
+	partitions, err := exporter.getPartitionsIDs(ctx, sourceTable)
 	if err != nil {
 		log.Print(err)
 		return err
@@ -218,11 +218,11 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 
 	// The number of queries to run is the same as the number of clauses
 	// generated earlier.
-	queryTotalMetric.WithLabelValues(config.Table).Set(float64(len(clauses)))
+	queryTotalMetric.WithLabelValues(config.Table).Set(float64(len(partitions)))
 
 	// Start a goroutine to print statistics periodically.
 	printStatsCtx, cancelPrintStats := context.WithCancel(ctx)
-	go exporter.printStats(printStatsCtx, len(clauses))
+	go exporter.printStats(printStatsCtx, len(partitions))
 	defer cancelPrintStats()
 
 	queryWg := sync.WaitGroup{}
@@ -253,7 +253,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 		close(exporter.results)
 	}()
 
-	for _, v := range clauses {
+	for _, v := range partitions {
 		// If the context has been canceled, stop sending jobs.
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -264,7 +264,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 		var buf bytes.Buffer
 		err = queryTpl.Execute(&buf, map[string]string{
 			"sourceTable": sourceTable,
-			"whereClause": v,
+			"partitionID": v,
 		})
 		if err != nil {
 			log.Print(err)
@@ -434,13 +434,8 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context, wg *sync.WaitGro
 	}
 }
 
-// getPartitionFilters returns all the WHERE clauses to filter by partition,
-// sorted by decreasing size. This allows to process the largest partitions
-// first.
-// E.g. if partitionField is continent_code_hash, this will return 7 clauses:
-// - WHERE continent_code_hash = <partition>
-// - [...]
-func (exporter *JSONExporter) getPartitionFilters(ctx context.Context,
+// getPartitionsIDs returns all partition IDs used by export queries to filter results.
+func (exporter *JSONExporter) getPartitionsIDs(ctx context.Context,
 	fullyQualifiedTable string) ([]string, error) {
 	partitions := exporter.format.Partitions(fullyQualifiedTable)
 	log.Print(partitions)
@@ -450,8 +445,8 @@ func (exporter *JSONExporter) getPartitionFilters(ctx context.Context,
 		log.Print(err)
 		return nil, err
 	}
-	// Generate the complete where clause for each query.
-	var clauses []string
+	// Generate the partition IDs from each row.
+	var partIDs []string
 	for {
 		var row bqRow
 		err := it.Next(&row)
@@ -461,9 +456,9 @@ func (exporter *JSONExporter) getPartitionFilters(ctx context.Context,
 		if err != nil {
 			return nil, err
 		}
-		clauses = append(clauses, exporter.format.Where(row))
+		partIDs = append(partIDs, exporter.format.Partition(row))
 	}
-	return clauses, nil
+	return partIDs, nil
 }
 
 // marshalAndUpload marshals the BigQuery rows into a JSON array and sends a
