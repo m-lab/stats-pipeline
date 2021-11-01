@@ -67,7 +67,7 @@ func TestAnnotationQueryFormatter_Partitions(t *testing.T) {
 	}
 }
 
-func TestAnnotationQueryFormatter_Where(t *testing.T) {
+func TestAnnotationQueryFormatter_Partition(t *testing.T) {
 	tests := []struct {
 		name string
 		row  map[string]bigquery.Value
@@ -78,30 +78,28 @@ func TestAnnotationQueryFormatter_Where(t *testing.T) {
 			row: map[string]bigquery.Value{
 				"date": civil.DateOf(time.Date(2020, time.June, 01, 0, 0, 0, 0, time.UTC)),
 			},
-			want: `WHERE DATE(TestTime) = DATE('2020-06-01') AND DATE('2020-06-01') BETWEEN
-            DATE_SUB(DATE(_PARTITIONTIME), INTERVAL 1 DAY)
-        AND DATE_ADD(DATE(_PARTITIONTIME), INTERVAL 1 DAY)`,
+			want: `2020-06-01`,
 		},
 		{
 			name: "error-missing-date",
 			row: map[string]bigquery.Value{
 				"missing_date": 10,
 			},
-			want: "WHERE TRUE",
+			want: "0001-01-01",
 		},
 		{
 			name: "error-date-wrong-type",
 			row: map[string]bigquery.Value{
 				"date": time.Date(2020, time.June, 01, 0, 0, 0, 0, time.UTC),
 			},
-			want: "WHERE TRUE",
+			want: "0001-01-01",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := NewTCPINFOAnnotationQueryFormatter()
-			if got := f.Where(tt.row); got != tt.want {
-				t.Errorf("AnnotationQueryFormatter.Where() = %v, want %v", got, tt.want)
+			if got := f.Partition(tt.row); got != tt.want {
+				t.Errorf("AnnotationQueryFormatter.Partition() = %v, want %v", got, tt.want)
 			}
 		})
 	}
