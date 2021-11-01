@@ -33,23 +33,23 @@ WITH annotations AS (
 
 SELECT
     tcpinfo.UUID,
-    MIN(tcpinfo.TestTime) as Timestamp,
-    ANY_VALUE(tcpinfo.ServerX) as Server,
-    ANY_VALUE(tcpinfo.ClientX) as Client,
-    REPLACE(CAST(DATE(tcpinfo.TestTime) AS STRING), "-", "/") as year_month_day,
+    MIN(tcpinfo.TestTime) AS Timestamp,
+    ANY_VALUE(tcpinfo.ServerX) AS Server,
+    ANY_VALUE(tcpinfo.ClientX) AS Client,
+    REPLACE(CAST(DATE(tcpinfo.TestTime) AS STRING), "-", "/") AS year_month_day,
 FROM
     tcpinfos AS tcpinfo
 LEFT OUTER JOIN
-    annotations as annotation
+    annotations AS annotation
 ON
         tcpinfo.UUID = annotation.id
     AND DATE(tcpinfo.TestTime) = annotation.date
 WHERE
         annotation.id IS NULL
     AND tcpinfo.UUID != ""
-    AND tcpinfo.UUID is not NULL
+    AND tcpinfo.UUID IS NOT NULL
     AND tcpinfo.ServerX.Site != ""
-    AND tcpinfo.ServerX.Geo is not NULL
+    AND tcpinfo.ServerX.Geo IS NOT NULL
 GROUP BY
     UUID,
     year_month_day
