@@ -14,7 +14,7 @@ steps:
     - -c
     - |
       kubectl create configmap stats-pipeline-config \
-      --from-file=k8s/data-processing/config/config.json -o yaml --dry-run > \
+      --from-file=k8s/data-processing/config -o yaml --dry-run > \
       configmap-manifest.json
 
 - name: "gcr.io/cloud-builders/kubectl"
@@ -55,6 +55,39 @@ steps:
     - apply
     - -f
     - k8s/data-processing/services/stats-pipeline.yaml
+  env:
+  - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
+  - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
+
+- name: "gcr.io/cloud-builders/gcloud"
+  id: "Generate manifest for annotation-export deployment"
+  entrypoint: /bin/sh
+  args:
+  - -c
+  - |
+    sed 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
+    k8s/data-processing/deployments/annotation-export-template.yaml > \
+    annotation-export-manifest.yaml
+
+# Annotation export deployment and service.
+- name: "gcr.io/cloud-builders/gke-deploy"
+  id: "Create annotation-export deployment"
+  args:
+  - run
+  - --filename=k8s/data-processing/deployments/annotation-export-manifest.yaml
+  - --image=gcr.io/$PROJECT_ID/stats-pipeline:$_DOCKER_TAG
+  - --location=$_COMPUTE_REGION
+  - --cluster=$_CLUSTER
+  # gke-deploy will fail if the output folder is non-empty, thus we use
+  # different folders for the two executions of this tool.
+  - --output=annotation-export/
+
+- name: "gcr.io/cloud-builders/kubectl"
+  id: "Create annotation-export service"
+  args:
+    - apply
+    - -f
+    - k8s/data-processing/services/annotation-export.yaml
   env:
   - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
   - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
