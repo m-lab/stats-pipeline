@@ -18,13 +18,13 @@
 -- partition dates.
 WITH annotations AS (
     SELECT *
-    FROM `mlab-oti.raw_ndt.annotation`
+    FROM `{{ .project }}.raw_ndt.annotation`
     WHERE date BETWEEN
           DATE_SUB(DATE('{{ .partitionID }}'), INTERVAL 1 DAY)
       AND DATE_ADD(DATE('{{ .partitionID }}'), INTERVAL 1 DAY)
 ), tcpinfos AS (
     SELECT *
-    FROM `mlab-oti.base_tables.tcpinfo`
+    FROM `{{ .project }}.base_tables.tcpinfo`
     WHERE DATE(TestTime) = DATE('{{ .partitionID }}')
       AND DATE('{{ .partitionID }}') BETWEEN
           DATE_SUB(DATE(_PARTITIONTIME), INTERVAL 1 DAY)

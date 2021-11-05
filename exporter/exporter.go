@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"regexp"
 	"sync"
@@ -45,6 +46,13 @@ var (
 		Help: "Bytes uploaded to GCS",
 	}, []string{
 		"table",
+	})
+
+	writtenFiles = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "stats_pipeline_exporter_written_files_total",
+		Help: "Files written to disk",
+	}, []string{
+		"table", "success",
 	})
 
 	queryTotalMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -265,6 +273,7 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 		err = queryTpl.Execute(&buf, map[string]string{
 			"sourceTable": sourceTable,
 			"partitionID": v,
+			"project":     exporter.projectID,
 		})
 		if err != nil {
 			log.Print(err)
@@ -424,6 +433,7 @@ func (exporter *JSONExporter) uploadWorker(ctx context.Context, wg *sync.WaitGro
 		inFlightUploadsHistogram.WithLabelValues(j.table).Observe(float64(
 			atomic.LoadInt32(&exporter.inflightUploads)))
 		err := exporter.output.Write(ctx, j.objName, j.content)
+		writtenFiles.WithLabelValues(j.table, fmt.Sprintf("%t", err == nil)).Inc()
 		atomic.AddInt32(&exporter.inflightUploads, -1)
 
 		uploadedBytesMetric.WithLabelValues(j.table).Add(float64(len(j.content)))

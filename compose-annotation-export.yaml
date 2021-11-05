@@ -10,7 +10,7 @@ services:
     volumes:
       - shared:/var/spool/ndt
       - $HOME/.config/gcloud/:/root/.config/gcloud
-      - ./:/config
+      - ./k8s:/k8s
     ports:
       - target: 8080
         published: 8080
@@ -27,7 +27,7 @@ services:
     command:
       - -prometheusx.listen-address=:9990
       - -exporter.query-workers=1
-      - -config=/config/config-annotation-export.json
+      - -config=/k8s/data-processing/config/config-annotation-export.json
       - -output=local
       - -export=annotation
       - -bucket=/var/spool/ndt/annotation

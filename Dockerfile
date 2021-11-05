@@ -12,5 +12,6 @@ FROM alpine:3.12
 RUN apk add ca-certificates
 COPY --from=build /go/bin/stats-pipeline /
 COPY --from=build /go/src/github.com/m-lab/stats-pipeline/statistics /statistics
+COPY --from=build /go/src/github.com/m-lab/stats-pipeline/annotation /annotation
 WORKDIR /
 ENTRYPOINT ["/stats-pipeline"]
