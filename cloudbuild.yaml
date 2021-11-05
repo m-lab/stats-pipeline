@@ -74,7 +74,7 @@ steps:
   id: "Create annotation-export deployment"
   args:
   - run
-  - --filename=k8s/data-processing/deployments/annotation-export-manifest.yaml
+  - --filename=annotation-export-manifest.yaml
   - --image=gcr.io/$PROJECT_ID/stats-pipeline:$_DOCKER_TAG
   - --location=$_COMPUTE_REGION
   - --cluster=$_CLUSTER
