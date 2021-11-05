@@ -1,0 +1,12 @@
+# A ClusterIP service to make stats-pipeline available to other pods.
+apiVersion: v1
+kind: Service
+metadata:
+  name: annotation-export-service
+spec:
+  type: ClusterIP
+  selector:
+    run: annotation-export
+  ports:
+    - protocol: TCP
+      port: 8080
