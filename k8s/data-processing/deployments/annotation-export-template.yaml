@@ -141,7 +141,9 @@ spec:
         configMap:
           name: stats-pipeline-config
       - name: shared-export-dir
-        emptyDir: {}
+        emptyDir:
+          # NOTE: allocates 50% of available RAM for tmpfs.
+          medium: Memory
       #- name: shared-ssd
       #  persistentVolumeClaim:
       #    claimName: auto-annotation-export-ssd0
