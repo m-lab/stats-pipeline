@@ -1,6 +1,6 @@
 {
     "tcpinfo": {
-        "exportQueryFile": "config/annotation/exports/tcpinfo_annotation_export.sql",
+        "exportQueryFile": "/annotation/exports/tcpinfo_annotation_export.sql",
         "dataset": "base_tables",
         "table": "tcpinfo",
         "outputPath": "{{ .year_month_day }}/{{ .UUID }}.json"
