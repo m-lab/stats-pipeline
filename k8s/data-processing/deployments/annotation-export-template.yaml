@@ -48,7 +48,6 @@ spec:
         volumeMounts:
         - name: config-volume
           mountPath: /etc/annotation-export
-        #- name: shared-ssd
         - name: shared-export-dir
           mountPath: /var/spool/ndt
       - name: pusher
@@ -79,7 +78,6 @@ spec:
           requests:
             cpu: "1"
         volumeMounts:
-        #- name: shared-ssd
         - name: shared-export-dir
           mountPath: /var/spool/ndt
 
@@ -133,9 +131,8 @@ spec:
         volumeMounts:
         - name: shared-export-dir
           mountPath: /var-spool-ndt
-          #name: shared-ssd
       nodeSelector:
-        annotation-export-node: 'true'
+        stats-pipeline-node: 'true'
       volumes:
       - name: config-volume
         configMap:
@@ -144,6 +141,3 @@ spec:
         emptyDir:
           # NOTE: allocates 50% of available RAM for tmpfs.
           medium: Memory
-      #- name: shared-ssd
-      #  persistentVolumeClaim:
-      #    claimName: auto-annotation-export-ssd0
