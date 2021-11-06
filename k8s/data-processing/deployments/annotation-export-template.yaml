@@ -24,7 +24,7 @@ spec:
           # stats-pipeline will write results to subdirectories of the named
           # -bucket directory.
           - -prometheusx.listen-address=:9990
-          - -exporter.query-workers=6
+          - -exporter.query-workers=5
           - -config=/etc/annotation-export/config-annotation-export.json
           - -export=annotation
           - -output=local
@@ -76,7 +76,7 @@ spec:
           - -metadata=MLAB.pusher.src.url=https://github.com/m-lab/pusher/tree/v1.20
         resources:
           requests:
-            cpu: "1"
+            cpu: "2"
         volumeMounts:
         - name: shared-export-dir
           mountPath: /var/spool/ndt
