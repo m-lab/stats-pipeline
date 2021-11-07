@@ -73,7 +73,7 @@ func TestLocalWriter_Write(t *testing.T) {
 				testingx.Must(t, err, "failed to create file")
 				f.Close()
 			}
-			lu := NewLocalWriter(tt.dir)
+			lu := NewLocalWriter(context.Background(), tt.dir)
 			if err := lu.Write(context.Background(), tt.path, tt.content); (err != nil) != tt.wantErr {
 				t.Errorf("LocalWriter.Write() error = %v, wantErr %v", err, tt.wantErr)
 			}
