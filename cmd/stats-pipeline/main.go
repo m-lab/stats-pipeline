@@ -83,7 +83,7 @@ func main() {
 	case "gcs":
 		wr = output.NewGCSWriter(uploader.New(stiface.AdaptClient(gcsClient), bucket))
 	case "local":
-		wr = output.NewLocalWriter(bucket)
+		wr = output.NewLocalWriter(mainCtx, bucket)
 	}
 
 	var f exporter.Formatter
