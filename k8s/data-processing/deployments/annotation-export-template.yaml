@@ -24,7 +24,7 @@ spec:
           # stats-pipeline will write results to subdirectories of the named
           # -bucket directory.
           - -prometheusx.listen-address=:9990
-          - -exporter.query-workers=4
+          - -exporter.query-workers=6
           - -config=/etc/annotation-export/config-annotation-export.json
           - -export=annotation
           - -output=local
