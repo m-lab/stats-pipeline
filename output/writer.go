@@ -3,6 +3,7 @@ package output
 import (
 	"context"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -51,22 +52,21 @@ func (lu *LocalWriter) monitorDir(ctx context.Context) {
 		stat := syscall.Statfs_t{}
 		err := syscall.Statfs(lu.dir, &stat)
 		if err != nil {
-			// TODO: how to handle errors?
-			continue
+			log.Printf("Reading statsfs failed with error: %v", err)
+			// Abort. The system is in a bad state.
+			return
 		}
 
+		lu.c.L.Lock()
 		if float64(stat.Ffree)/float64(stat.Files) < 0.1 || float64(stat.Bfree)/float64(stat.Blocks) < 0.1 {
 			// Not safe to write.
-			lu.c.L.Lock()
 			lu.safe = false
-			lu.c.L.Unlock()
 		} else {
 			// Safe to write.
-			lu.c.L.Lock()
 			lu.safe = true
-			lu.c.L.Unlock()
 			lu.c.Broadcast()
 		}
+		lu.c.L.Unlock()
 	}
 }
 
