@@ -76,7 +76,7 @@ spec:
           - -metadata=MLAB.pusher.src.url=https://github.com/m-lab/pusher/tree/v1.20
         resources:
           requests:
-            cpu: "2"
+            cpu: "1500m"
         volumeMounts:
         - name: shared-export-dir
           mountPath: /var/spool/ndt
