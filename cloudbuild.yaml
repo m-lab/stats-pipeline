@@ -119,7 +119,7 @@ steps:
   - |
     sed -e 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
     -e "s/{{ANNOTATION_EXPORT_CRON_SCHEDULE}}/${_ANNOTATION_EXPORT_CRON_SCHEDULE}/g" \
-    k8s/data-processing/jobs/annotation-export-cronjob.yaml.template > \
+    k8s/data-processing/jobs/annotation-export-cronjob.template > \
     annotation-export-cronjob.yaml
 
 - name: "gcr.io/cloud-builders/gke-deploy"
