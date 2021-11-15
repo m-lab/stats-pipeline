@@ -19,7 +19,7 @@ spec:
             args:
             - /bin/bash
             - run-pipeline.sh
-            - "stats-pipeline-service:8080"
+            - "annotation-export-service:8080"
             env:
               - name: PROJECT
                 value: {{GCLOUD_PROJECT}}
