@@ -46,4 +46,12 @@ required but ignored.
 
 ## Kubernetes
 
-TODO(soltesz): add notes for kubernetes configuration/deployment.
+The export process is started via a CronJob which by default is scheduled to
+never run.
+
+To start an annotation export manually, run the following command on the
+`data-processing` cluster:
+
+```sh
+kubectl create job --from=cronjob/annotation-export-cronjob annotation-export-manual
+```
