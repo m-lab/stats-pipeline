@@ -4,7 +4,6 @@
 # generates updated maptiles.
 
 set -euxo pipefail
-PROJECT=${PROJECT:?"Please provide project"}
 ENDPOINT=${1?"Please provide the endpoint (hostname + port). Usage: $0 <endpoint>"}
 
 # Start the pipeline for the past 2 days.

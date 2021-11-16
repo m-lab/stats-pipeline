@@ -20,6 +20,3 @@ spec:
             - /bin/bash
             - run-pipeline.sh
             - "stats-pipeline-service:8080"
-            env:
-              - name: PROJECT
-                value: {{GCLOUD_PROJECT}}
