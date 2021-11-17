@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: annotation-export
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:

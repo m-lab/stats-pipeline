@@ -2,9 +2,9 @@
 apiVersion: batch/v1beta1
 kind: CronJob
 metadata:
-  name: stats-pipeline-cronjob
+  name: annotation-export-cronjob
 spec:
-  schedule: "{{PIPELINE_CRON_SCHEDULE}}"
+  schedule: "{{ANNOTATION_EXPORT_CRON_SCHEDULE}}"
   concurrencyPolicy: Forbid
   jobTemplate:
     spec:
@@ -19,4 +19,4 @@ spec:
             args:
             - /bin/bash
             - run-pipeline.sh
-            - "stats-pipeline-service:8080"
+            - "annotation-export-service:8080"
