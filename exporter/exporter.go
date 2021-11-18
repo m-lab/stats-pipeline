@@ -230,8 +230,13 @@ func (exporter *JSONExporter) Export(ctx context.Context,
 
 	// Start a goroutine to print statistics periodically.
 	printStatsCtx, cancelPrintStats := context.WithCancel(ctx)
-	go exporter.printStats(printStatsCtx, len(partitions))
-	defer cancelPrintStats()
+	statsWg := sync.WaitGroup{}
+	statsWg.Add(1)
+	go exporter.printStats(printStatsCtx, &statsWg, len(partitions))
+	defer func() {
+		cancelPrintStats()
+		statsWg.Wait()
+	}()
 
 	queryWg := sync.WaitGroup{}
 	// Create queryWorkers.
@@ -490,10 +495,17 @@ func (exporter *JSONExporter) marshalAndUpload(tableName, objName string, rows [
 }
 
 // printStats prints statistics about the ongoing export every second.
-func (exporter *JSONExporter) printStats(ctx context.Context, totQueries int) {
+func (exporter *JSONExporter) printStats(ctx context.Context, wg *sync.WaitGroup,
+	totQueries int) {
+	// Send a signal to the main goroutine when the stats goroutine has finished.
+	defer func() {
+		wg.Done()
+	}()
 	uploaded := 0
 	errors := 0
 	start := time.Now()
+
+	// Keep printing stats every second until the context is canceled.
 	t := time.NewTicker(1 * time.Second)
 	for {
 		select {

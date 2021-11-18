@@ -8,6 +8,7 @@ import (
 	"log"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"text/template"
 	"time"
@@ -217,7 +218,9 @@ func Test_printStats(t *testing.T) {
 	f := formatter.NewStatsQueryFormatter()
 	exporter := New(bq, "project", wr, f)
 
-	go exporter.printStats(ctx, 1)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go exporter.printStats(ctx, &wg, 1)
 	// Send a successful upload and an error, then check the output after a
 	// second.
 	exporter.results <- UploadResult{
@@ -228,7 +231,10 @@ func Test_printStats(t *testing.T) {
 		err:     errors.New("upload failed"),
 	}
 
+	// Make sure we had enough time to print the stats at least once.
 	time.Sleep(2 * time.Second)
+	cancel()
+	wg.Wait()
 	if !strings.Contains(out.String(), "uploaded: 1") ||
 		!strings.Contains(out.String(), "1 errors") {
 		t.Errorf("printStats() didn't print the expected output: %v", out.String())
