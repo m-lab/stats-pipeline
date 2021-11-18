@@ -174,7 +174,6 @@ func TestJSONExporter_marshalAndUpload(t *testing.T) {
 		if err != nil {
 			t.Errorf("marshalAndUpload() returned err: %v", err)
 		}
-		close(jobs)
 	}()
 	// Read from the channel. If the channel is closed and nothing has been
 	// sent, the function failed.
@@ -185,6 +184,7 @@ func TestJSONExporter_marshalAndUpload(t *testing.T) {
 	} else {
 		t.Errorf("marshalAndUpload() didn't send a value")
 	}
+	close(jobs)
 
 	// Call marshalAndUpload with a row that cannot be marshalled.
 	unmarshallableRow := bqRow{
