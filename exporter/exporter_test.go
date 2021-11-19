@@ -502,7 +502,5 @@ func TestJSONExporter_uploadWorkerCancellation(t *testing.T) {
 	// Wait for the worker and the job-sending goroutine to finish.
 	wg.Wait()
 
-	// Check the content written by the last uploadWorker.
-
 	close(exporter.results)
 }
