@@ -473,7 +473,6 @@ func TestJSONExporter_uploadWorkerCancellation(t *testing.T) {
 
 	// Continuously send the same job to the uploadJobs channel via a fake
 	// "query worker".
-	wg.Add(1)
 	go func() {
 		for {
 			select {
@@ -481,7 +480,6 @@ func TestJSONExporter_uploadWorkerCancellation(t *testing.T) {
 				// Close the channel to signal that there are no more upload jobs and
 				// decrease the wait group counter.
 				close(exporter.uploadJobs)
-				wg.Done()
 				return
 			case exporter.uploadJobs <- &UploadJob{
 				table:   "testtable",
