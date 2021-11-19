@@ -465,6 +465,8 @@ func TestJSONExporter_uploadWorkerCancellation(t *testing.T) {
 	}
 
 	wg := sync.WaitGroup{}
+
+	// Run two uploadWorker goroutines (at least) to simulate actual usage.
 	wg.Add(2)
 	go exporter.uploadWorker(ctx, &wg)
 	go exporter.uploadWorker(ctx, &wg)
