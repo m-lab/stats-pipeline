@@ -454,7 +454,8 @@ func TestJSONExporter_uploadWorker(t *testing.T) {
 func TestJSONExporter_uploadWorkerCancellation(t *testing.T) {
 	// Test termination of the worker when the context is canceled.
 	// We expect both the query worker and the upload worker to terminate
-	// properly on context cancellation.
+	// on context cancellation. The fact that this test does not time out
+	// means that the workers terminated properly.
 	ctx, cancel := context.WithCancel(context.Background())
 	writer := &mockWriter{mu: &sync.Mutex{}}
 	exporter := &JSONExporter{
