@@ -1,0 +1,8 @@
+{
+    "traceroute": {
+        "exportQueryFile": "/annotation/exports/traceroute_hopannotation1_export.sql",
+        "dataset": "base_tables",
+        "table": "traceroute",
+        "outputPath": "{{ .Date }}/{{ .FilenameTimestamp }}_{{ .Hostname }}_{{ .IP }}.json"
+    }
+}
