@@ -52,7 +52,7 @@ func TestHopAnnotation1QueryFormatter_Partitions(t *testing.T) {
 			source: "a.b.c",
 			want: `SELECT DATE(TestTime) as date
          FROM a.b.c
-         WHERE DATE(TestTime) BETWEEN DATE('2019-03-29') AND DATE('2021-09-09')
+         WHERE DATE(TestTime) BETWEEN DATE('2019-03-29') AND DATE('2021-09-08')
          GROUP BY date
          ORDER BY date`,
 		},
