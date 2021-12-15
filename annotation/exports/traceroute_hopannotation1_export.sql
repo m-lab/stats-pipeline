@@ -16,13 +16,15 @@ WITH annotations AS (
 )
 
 SELECT
+-- The below fields make up the content of the hopannotation1 file and are written to disk.
     hop.Source.hopannotation1.ID,
-    FORMAT_TIMESTAMP("%FT%TZ", hop.Source.hopannotation1.Timestamp) AS Timestamp,
-    hop.Source.hopannotation1.Annotations,
-    REPLACE(CAST(DATE(traceroute.TestTime) AS STRING), "-", "/") AS Date,
-    FORMAT_TIMESTAMP("%Y%m%dT%H%M%dZ", hop.Source.hopannotation1.Timestamp) AS FilenameTimestamp,
+    FORMAT_TIMESTAMP("%FT%TZ", MIN(hop.Source.hopannotation1.Timestamp)) AS Timestamp,
+    ANY_VALUE(hop.Source.hopannotation1.Annotations) AS Annotations,
+-- The below fields are used to construct the file path and name.
+    REPLACE(CAST(DATE(hop.Source.hopannotation1.Timestamp) AS STRING), "-", "/") AS Date,
+    FORMAT_TIMESTAMP("%Y%m%dT000000Z", MIN(hop.Source.hopannotation1.Timestamp)) AS FilenameTimestamp,
     REGEXP_EXTRACT(hop.Source.hopannotation1.ID, r".+_(.+)_.+") AS Hostname,
-    hop.Source.IP
+    ANY_VALUE(hop.Source.IP) AS IP
 FROM
     traceroutes AS traceroute, UNNEST(Hop) AS hop
 LEFT OUTER JOIN
@@ -33,3 +35,4 @@ WHERE annotation.id IS NULL
     AND hop.Source.hopannotation1.ID != ""
     AND hop.Source.hopannotation1.ID IS NOT NULL
     AND hop.Source.hopannotation1.Annotations IS NOT NULL
+GROUP BY hop.Source.hopannotation1.ID, Date
