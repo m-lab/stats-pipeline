@@ -1,0 +1,58 @@
+version: '3.7'
+volumes:
+  shared:
+services:
+  hopannotation1_export:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: local-stats-pipeline
+    volumes:
+      - shared:/var/spool/ndt
+      - $HOME/.config/gcloud/:/root/.config/gcloud
+      - ./k8s:/k8s
+    ports:
+      - target: 8080
+        published: 8080
+        protocol: tcp
+        mode: host
+      - target: 9990
+        published: 9990
+        protocol: tcp
+        mode: host
+      - target: 9991
+        published: 9991
+        protocol: tcp
+        mode: host
+    command:
+      - -prometheusx.listen-address=:9990
+      - -exporter.query-workers=1
+      - -config=/k8s/data-processing/config/config-hopannotation1-export.json
+      - -output=local
+      - -export=hopannotation1
+      - -bucket=/var/spool/ndt/hopannotation1
+      - -project=mlab-sandbox
+
+  pusher:
+    image: measurementlab/pusher:v1.19
+    volumes:
+      - shared:/var/spool/ndt
+      - $HOME/.config/gcloud/:/root/.config/gcloud
+    network_mode: "service:hopannotation1_export"
+    command:
+      - -prometheusx.listen-address=:9991
+      - -bucket=thirdparty-annotation-mlab-sandbox
+      - -experiment=ndt
+      - -datatype=hopannotation1
+      - -directory=/var/spool/ndt
+      - -node_name=third-party
+      - -archive_size_threshold=20MB
+      - -max_file_age=10m               # No need to wait after writing to upload a file (default 1h).
+      - -archive_wait_time_min=15m      # (default 30m0s)
+      - -archive_wait_time_expected=30m # (default 1h0m0s)
+      - -archive_wait_time_max=1h       # (default 2h0m0s)
+      - -sigterm_wait_time=60s
+      - -metadata=MLAB.server.name=$HOSTNAME
+      - -metadata=MLAB.experiment.name=ndt
+      - -metadata=MLAB.pusher.image=measurementlab/pusher:v1.19
+      - -metadata=MLAB.pusher.src.url=https://github.com/m-lab/pusher/tree/v1.19

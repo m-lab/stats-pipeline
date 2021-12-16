@@ -93,7 +93,7 @@ func main() {
 	case "annotation":
 		f = formatter.NewTCPINFOAnnotationQueryFormatter()
 	case "hopannotation1":
-		panic("TODO: implement hopannotation1 formatter")
+		f = formatter.NewTracerouteHopAnnotation1QueryFormatter()
 	}
 	exp := exporter.New(bqiface.AdaptClient(bqClient), project, wr, f)
 
