@@ -1,0 +1,145 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hopannotation1-export
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      run: hopannotation1-export
+  template:
+    metadata:
+      labels:
+        run: hopannotation1-export
+      annotations:
+        prometheus.io/scrape: 'true'
+    spec:
+      containers:
+      - name: stats-pipeline
+        # The exact image to be deployed is replaced by gke-deploy, this is
+        # a placeholder.
+        image: gcr.io/{{GCLOUD_PROJECT}}/stats-pipeline
+        args:
+          # NOTE: in "local" output mode, and export "hopannotation1" mode, the
+          # stats-pipeline will write results to subdirectories of the named
+          # -bucket directory.
+          - -prometheusx.listen-address=:9990
+          - -exporter.query-workers=4
+          - -config=/etc/hopannotation1-export/config-hopannotation1-export.json
+          - -export=hopannotation1
+          - -output=local
+          - -bucket=/var/spool/ndt/hopannotation1
+          - -project={{GCLOUD_PROJECT}}
+        ports:
+          # This is so Prometheus can be scraped.
+          - name: prometheus-port
+            containerPort: 9990
+          - name: service-port
+            containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: prometheus-port
+        # Note: This service runs on a dedicated 8-CPU node.
+        resources:
+          requests:
+            cpu: "5"
+            memory: "2Gi"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/hopannotation1-export
+        - name: shared-export-dir
+          mountPath: /var/spool/ndt
+      - name: pusher
+        image: measurementlab/pusher:v1.20
+        ports:
+          - name: pusher-port
+            containerPort: 9991
+        args:
+          - -prometheusx.listen-address=:9991
+          - -bucket=thirdparty-annotation-{{GCLOUD_PROJECT}}
+          - -experiment=ndt
+          - -datatype=hopannotation1
+          - -directory=/var/spool/ndt
+          - -node_name=third-party
+          # The following thresholds create archive uploads more quickly than defaults.
+          # NOTE: JSON files compress around 60x, so 3MB archives are about 180MB on disk.
+          - -archive_size_threshold=2MB
+          - -max_file_age=10m               # After writing, No need to wait to upload a file (default 1h).
+          - -archive_wait_time_min=5m       # (default 30m0s)
+          - -archive_wait_time_expected=10m # (default 1h0m0s)
+          - -archive_wait_time_max=15m      # (default 2h0m0s)
+          - -sigterm_wait_time=60s
+          - -metadata=MLAB.server.name=data-processing
+          - -metadata=MLAB.experiment.name=ndt
+          - -metadata=MLAB.pusher.image=measurementlab/pusher:v1.20
+          - -metadata=MLAB.pusher.src.url=https://github.com/m-lab/pusher/tree/v1.20
+        resources:
+          requests:
+            cpu: "1500m"
+        volumeMounts:
+        - name: shared-export-dir
+          mountPath: /var/spool/ndt
+
+      # Run a node-exporter as part of the pod so that it has access to the same
+      # namespace and volumes. This allows simple disk usage monitoring of the
+      # shared disk.
+      - image: prom/node-exporter:v0.18.1
+        name: node-exporter
+        # Note: only enable the filesystem collector, and ignore system paths.
+        args: ["--no-collector.arp",
+               "--no-collector.bcache",
+               "--no-collector.bonding",
+               "--no-collector.conntrack",
+               "--no-collector.cpu",
+               "--no-collector.cpufreq",
+               "--no-collector.diskstats",
+               "--no-collector.edac",
+               "--no-collector.entropy",
+               "--no-collector.filefd",
+               "--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($|/)",
+               "--no-collector.hwmon",
+               "--no-collector.infiniband",
+               "--no-collector.ipvs",
+               "--no-collector.loadavg",
+               "--no-collector.mdadm",
+               "--no-collector.meminfo",
+               "--no-collector.netclass",
+               "--no-collector.netdev",
+               "--no-collector.netstat",
+               "--no-collector.nfs",
+               "--no-collector.nfsd",
+               "--no-collector.pressure",
+               "--no-collector.sockstat",
+               "--no-collector.stat",
+               "--no-collector.textfile",
+               "--no-collector.time",
+               "--no-collector.timex",
+               "--no-collector.uname",
+               "--no-collector.vmstat",
+               "--no-collector.xfs",
+               "--no-collector.zfs"]
+        ports:
+          - containerPort: 9100
+        resources:
+          requests:
+            memory: "10Mi"
+            cpu: "500m"
+          limits:
+            memory: "10Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: shared-export-dir
+          mountPath: /var-spool-ndt
+      nodeSelector:
+        stats-pipeline-node: 'true'
+      volumes:
+      - name: config-volume
+        configMap:
+          name: stats-pipeline-config
+      - name: shared-export-dir
+        emptyDir:
+          # NOTE: allocates 50% of available RAM for tmpfs.
+          medium: Memory
