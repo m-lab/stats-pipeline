@@ -122,10 +122,13 @@ spec:
                "--no-collector.zfs"]
         ports:
           - containerPort: 9100
-        # resources:
-        #   requests:
-        #     memory: "10Mi"
-        #     cpu: "500m"
+        resources:
+          requests:
+            memory: "10Mi"
+            cpu: "500m"
+          limits:
+            memory: "10Mi"
+            cpu: "500m"
         volumeMounts:
         - name: shared-export-dir
           mountPath: /var-spool-ndt
