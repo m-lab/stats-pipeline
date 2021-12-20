@@ -42,7 +42,6 @@ spec:
           httpGet:
             path: /metrics
             port: prometheus-port
-        Note: This service runs on a dedicated 8-CPU node.
         resources:
           requests:
             cpu: "4"
