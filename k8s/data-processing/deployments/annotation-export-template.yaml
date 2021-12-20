@@ -128,8 +128,8 @@ spec:
             memory: "10Mi"
             cpu: "500m"
           limits:
-            memory: "10Mi"
-            cpu: "500m"
+            memory: "20Mi"
+            cpu: "1"
         volumeMounts:
         - name: shared-export-dir
           mountPath: /var-spool-ndt

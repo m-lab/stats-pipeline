@@ -45,7 +45,7 @@ spec:
         # Note: This service runs on a dedicated 8-CPU node.
         resources:
           requests:
-            cpu: "5"
+            cpu: "2"
             memory: "2Gi"
         volumeMounts:
         - name: config-volume
@@ -125,9 +125,6 @@ spec:
           - containerPort: 9100
         resources:
           requests:
-            memory: "10Mi"
-            cpu: "500m"
-          limits:
             memory: "10Mi"
             cpu: "500m"
         volumeMounts:
