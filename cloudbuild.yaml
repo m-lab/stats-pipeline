@@ -59,38 +59,38 @@ steps:
   - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
   - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
 
-- name: "gcr.io/cloud-builders/gcloud"
-  id: "Generate manifest for annotation-export deployment"
-  entrypoint: /bin/sh
-  args:
-  - -c
-  - |
-    sed 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
-    k8s/data-processing/deployments/annotation-export-template.yaml > \
-    annotation-export-manifest.yaml
+# - name: "gcr.io/cloud-builders/gcloud"
+#   id: "Generate manifest for annotation-export deployment"
+#   entrypoint: /bin/sh
+#   args:
+#   - -c
+#   - |
+#     sed 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
+#     k8s/data-processing/deployments/annotation-export-template.yaml > \
+#     annotation-export-manifest.yaml
 
-# Annotation export deployment and service.
-- name: "gcr.io/cloud-builders/gke-deploy"
-  id: "Create annotation-export deployment"
-  args:
-  - run
-  - --filename=annotation-export-manifest.yaml
-  - --image=gcr.io/$PROJECT_ID/stats-pipeline:$_DOCKER_TAG
-  - --location=$_COMPUTE_REGION
-  - --cluster=$_CLUSTER
-  # gke-deploy will fail if the output folder is non-empty, thus we use
-  # different folders for the two executions of this tool.
-  - --output=annotation-export/
+# # Annotation export deployment and service.
+# - name: "gcr.io/cloud-builders/gke-deploy"
+#   id: "Create annotation-export deployment"
+#   args:
+#   - run
+#   - --filename=annotation-export-manifest.yaml
+#   - --image=gcr.io/$PROJECT_ID/stats-pipeline:$_DOCKER_TAG
+#   - --location=$_COMPUTE_REGION
+#   - --cluster=$_CLUSTER
+#   # gke-deploy will fail if the output folder is non-empty, thus we use
+#   # different folders for the two executions of this tool.
+#   - --output=annotation-export/
 
-- name: "gcr.io/cloud-builders/kubectl"
-  id: "Create annotation-export service"
-  args:
-    - apply
-    - -f
-    - k8s/data-processing/services/annotation-export.yaml
-  env:
-  - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
-  - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
+# - name: "gcr.io/cloud-builders/kubectl"
+#   id: "Create annotation-export service"
+#   args:
+#     - apply
+#     - -f
+#     - k8s/data-processing/services/annotation-export.yaml
+#   env:
+#   - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
+#   - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
 
 - name: "gcr.io/cloud-builders/gcloud"
   id: "Generate manifest for hopannotation1-export deployment"
@@ -144,16 +144,16 @@ steps:
     k8s/data-processing/jobs/stats-pipeline-cronjob.yaml.template > \
     stats-pipeline-cronjob.yaml
 
-- name: "gcr.io/cloud-builders/gcloud"
-  id: "Generate manifest for the annotation-export-cronjob"
-  entrypoint: /bin/sh
-  args:
-  - -c
-  - |
-    sed -e 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
-    -e "s/{{ANNOTATION_EXPORT_CRON_SCHEDULE}}/${_ANNOTATION_EXPORT_CRON_SCHEDULE}/g" \
-    k8s/data-processing/jobs/annotation-export-cronjob.template > \
-    annotation-export-cronjob.yaml
+# - name: "gcr.io/cloud-builders/gcloud"
+#   id: "Generate manifest for the annotation-export-cronjob"
+#   entrypoint: /bin/sh
+#   args:
+#   - -c
+#   - |
+#     sed -e 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
+#     -e "s/{{ANNOTATION_EXPORT_CRON_SCHEDULE}}/${_ANNOTATION_EXPORT_CRON_SCHEDULE}/g" \
+#     k8s/data-processing/jobs/annotation-export-cronjob.template > \
+#     annotation-export-cronjob.yaml
 
 - name: "gcr.io/cloud-builders/gke-deploy"
   id: "Create stats-pipeline CronJob"
@@ -167,14 +167,14 @@ steps:
   # different folders for the two executions of this tool.
   - --output=stats-pipeline-runner/
 
-- name: "gcr.io/cloud-builders/gke-deploy"
-  id: "Create annotation-export CronJob"
-  args:
-  - run
-  - --filename=annotation-export-cronjob.yaml
-  - --image=gcr.io/$PROJECT_ID/stats-pipeline-runner:$_DOCKER_TAG
-  - --location=$_COMPUTE_REGION
-  - --cluster=$_CLUSTER
-  # gke-deploy will fail if the output folder is non-empty, thus we use
-  # different folders for the two executions of this tool.
-  - --output=annotation-export-runner/
+# - name: "gcr.io/cloud-builders/gke-deploy"
+#   id: "Create annotation-export CronJob"
+#   args:
+#   - run
+#   - --filename=annotation-export-cronjob.yaml
+#   - --image=gcr.io/$PROJECT_ID/stats-pipeline-runner:$_DOCKER_TAG
+#   - --location=$_COMPUTE_REGION
+#   - --cluster=$_CLUSTER
+#   # gke-deploy will fail if the output folder is non-empty, thus we use
+#   # different folders for the two executions of this tool.
+#   - --output=annotation-export-runner/
