@@ -43,10 +43,10 @@ spec:
             path: /metrics
             port: prometheus-port
         # Note: This service runs on a dedicated 8-CPU node.
-        resources:
-          requests:
-            cpu: "5"
-            memory: "2Gi"
+        # resources:
+        #   requests:
+        #     cpu: "5"
+        #     memory: "2Gi"
         volumeMounts:
         - name: config-volume
           mountPath: /etc/hopannotation1-export
@@ -76,9 +76,9 @@ spec:
           - -metadata=MLAB.experiment.name=ndt
           - -metadata=MLAB.pusher.image=measurementlab/pusher:v1.20
           - -metadata=MLAB.pusher.src.url=https://github.com/m-lab/pusher/tree/v1.20
-        resources:
-          requests:
-            cpu: "1500m"
+        # resources:
+        #   requests:
+        #     cpu: "1500m"
         volumeMounts:
         - name: shared-export-dir
           mountPath: /var/spool/ndt
@@ -123,10 +123,10 @@ spec:
                "--no-collector.zfs"]
         ports:
           - containerPort: 9100
-        resources:
-          requests:
-            memory: "10Mi"
-            cpu: "500m"
+        # resources:
+        #   requests:
+        #     memory: "10Mi"
+        #     cpu: "500m"
         volumeMounts:
         - name: shared-export-dir
           mountPath: /var-spool-ndt
