@@ -60,34 +60,34 @@ steps:
   - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
 
 - name: "gcr.io/cloud-builders/gcloud"
-  id: "Generate manifest for annotation-export deployment"
+  id: "Generate manifest for hopannotation1-export deployment"
   entrypoint: /bin/sh
   args:
   - -c
   - |
     sed 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
-    k8s/data-processing/deployments/annotation-export-template.yaml > \
-    annotation-export-manifest.yaml
+    k8s/data-processing/deployments/hopannotation1-export-template.yaml > \
+    hopannotation1-export-manifest.yaml
 
-# Annotation export deployment and service.
+# hopannotation1 export deployment and service.
 - name: "gcr.io/cloud-builders/gke-deploy"
-  id: "Create annotation-export deployment"
+  id: "Create hopannotation1-export deployment"
   args:
   - run
-  - --filename=annotation-export-manifest.yaml
+  - --filename=hopannotation1-export-manifest.yaml
   - --image=gcr.io/$PROJECT_ID/stats-pipeline:$_DOCKER_TAG
   - --location=$_COMPUTE_REGION
   - --cluster=$_CLUSTER
   # gke-deploy will fail if the output folder is non-empty, thus we use
   # different folders for the two executions of this tool.
-  - --output=annotation-export/
+  - --output=hopannotation1-export/
 
 - name: "gcr.io/cloud-builders/kubectl"
-  id: "Create annotation-export service"
+  id: "Create hopannotation1-export service"
   args:
     - apply
     - -f
-    - k8s/data-processing/services/annotation-export.yaml
+    - k8s/data-processing/services/hopannotation1-export.yaml
   env:
   - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
   - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
