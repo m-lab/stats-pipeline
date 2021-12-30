@@ -46,12 +46,12 @@ required but ignored.
 
 ## Kubernetes
 
-The export process is started via a CronJob which by default is scheduled to
+Only the hopannotation1 export process is available on Kubernetes. The export process is started via a CronJob which by default is scheduled to
 never run.
 
 To start an annotation export manually, run the following command on the
 `data-processing` cluster:
 
 ```sh
-kubectl create job --from=cronjob/annotation-export-cronjob annotation-export-manual
+kubectl create job --from=cronjob/hopannotation1-export-cronjob hopannotation1-export-manual
 ```
