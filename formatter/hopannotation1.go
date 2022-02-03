@@ -31,7 +31,7 @@ func (f *HopAnnotation1QueryFormatter) Partitions(source string) string {
 	return fmt.Sprintf(
 		`SELECT DATE(TestTime) as date
          FROM %s
-         WHERE DATE(TestTime) BETWEEN DATE('2019-03-29') AND DATE('2021-09-08')
+         WHERE DATE(TestTime) BETWEEN DATE('2013-05-08') AND DATE('2021-09-08')
          GROUP BY date
          ORDER BY date`, source)
 }
