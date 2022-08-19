@@ -1,8 +1,8 @@
-FROM golang:1.15 as build
+FROM golang:1.18 as build
 ENV CGO_ENABLED 0
 ADD . /go/src/github.com/m-lab/stats-pipeline
 WORKDIR /go/src/github.com/m-lab/stats-pipeline
-RUN go get \
+RUN go install \
     -v \
     -ldflags "-X github.com/m-lab/go/prometheusx.GitShortCommit=$(git log -1 --format=%h)" \
     github.com/m-lab/stats-pipeline/cmd/stats-pipeline
