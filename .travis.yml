@@ -1,13 +1,14 @@
 language: go
 
 go:
- - "1.15.8"
+ - 1.18
 
 install:
 - go get -v -t ./...
+- go install -v ./...
 
 before_script:
-- go get github.com/mattn/goveralls
+- go install github.com/mattn/goveralls@latest
 
 script:
 - go vet ./...
