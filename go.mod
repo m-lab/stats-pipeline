@@ -10,7 +10,7 @@ require (
 	github.com/m-lab/go v0.1.45
 	github.com/m-lab/traceroute-caller v0.9.1
 	github.com/m-lab/uuid-annotator v0.4.5
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.11.1
 	github.com/prometheus/client_model v0.2.0
 	google.golang.org/api v0.32.0
 )
