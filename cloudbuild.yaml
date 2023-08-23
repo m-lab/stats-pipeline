@@ -25,7 +25,7 @@ steps:
     - configmap-manifest.json
   env:
   - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
-  - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
+  - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER_NAME
 
 - name: "gcr.io/cloud-builders/gcloud"
   id: "Generate manifest for stats-pipeline deployment"
@@ -44,7 +44,7 @@ steps:
   - --filename=manifest.yaml
   - --image=gcr.io/$PROJECT_ID/stats-pipeline:$_DOCKER_TAG
   - --location=$_COMPUTE_REGION
-  - --cluster=$_CLUSTER
+  - --cluster=$_CLUSTER_NAME
   # gke-deploy will fail if the output folder is non-empty, thus we use
   # different folders for the two executions of this tool.
   - --output=pipeline/
@@ -57,7 +57,7 @@ steps:
     - k8s/$_CLUSTER_NAME/services/stats-pipeline.yaml
   env:
   - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
-  - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
+  - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER_NAME
 
 - name: "gcr.io/cloud-builders/gcloud"
   id: "Generate manifest for hopannotation1-export deployment"
@@ -77,7 +77,7 @@ steps:
   - --filename=hopannotation1-export-manifest.yaml
   - --image=gcr.io/$PROJECT_ID/stats-pipeline:$_DOCKER_TAG
   - --location=$_COMPUTE_REGION
-  - --cluster=$_CLUSTER
+  - --cluster=$_CLUSTER_NAME
   # gke-deploy will fail if the output folder is non-empty, thus we use
   # different folders for the two executions of this tool.
   - --output=hopannotation1-export/
@@ -90,7 +90,7 @@ steps:
     - k8s/$_CLUSTER_NAME/services/hopannotation1-export.yaml
   env:
   - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
-  - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
+  - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER_NAME
 
 - name: "gcr.io/cloud-builders/docker"
   id: "Build the stats-pipeline-runner docker container"
@@ -129,7 +129,7 @@ steps:
   - --filename=stats-pipeline-cronjob.yaml
   - --image=gcr.io/$PROJECT_ID/stats-pipeline-runner:$_DOCKER_TAG
   - --location=$_COMPUTE_REGION
-  - --cluster=$_CLUSTER
+  - --cluster=$_CLUSTER_NAME
   # gke-deploy will fail if the output folder is non-empty, thus we use
   # different folders for the two executions of this tool.
   - --output=stats-pipeline-runner/
@@ -141,7 +141,7 @@ steps:
   - --filename=hopannotation1-export-cronjob.yaml
   - --image=gcr.io/$PROJECT_ID/stats-pipeline-runner:$_DOCKER_TAG
   - --location=$_COMPUTE_REGION
-  - --cluster=$_CLUSTER
+  - --cluster=$_CLUSTER_NAME
   # gke-deploy will fail if the output folder is non-empty, thus we use
   # different folders for the two executions of this tool.
   - --output=hopannotation1-export-runner/
