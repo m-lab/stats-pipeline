@@ -14,7 +14,7 @@ steps:
     - -c
     - |
       kubectl create configmap stats-pipeline-config \
-      --from-file=k8s/data-processing/config -o yaml --dry-run > \
+      --from-file=k8s/$_CLUSTER_NAME/config -o yaml --dry-run > \
       configmap-manifest.json
 
 - name: "gcr.io/cloud-builders/kubectl"
@@ -34,7 +34,7 @@ steps:
   - -c
   - |
     sed 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
-    k8s/data-processing/deployments/stats-pipeline.yaml.template > \
+    k8s/$_CLUSTER_NAME/deployments/stats-pipeline.yaml.template > \
     manifest.yaml
 
 - name: "gcr.io/cloud-builders/gke-deploy"
@@ -54,7 +54,7 @@ steps:
   args:
     - apply
     - -f
-    - k8s/data-processing/services/stats-pipeline.yaml
+    - k8s/$_CLUSTER_NAME/services/stats-pipeline.yaml
   env:
   - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
   - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
@@ -66,7 +66,7 @@ steps:
   - -c
   - |
     sed 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
-    k8s/data-processing/deployments/hopannotation1-export-template.yaml > \
+    k8s/$_CLUSTER_NAME/deployments/hopannotation1-export-template.yaml > \
     hopannotation1-export-manifest.yaml
 
 # hopannotation1 export deployment and service.
@@ -87,7 +87,7 @@ steps:
   args:
     - apply
     - -f
-    - k8s/data-processing/services/hopannotation1-export.yaml
+    - k8s/$_CLUSTER_NAME/services/hopannotation1-export.yaml
   env:
   - CLOUDSDK_COMPUTE_REGION=$_COMPUTE_REGION
   - CLOUDSDK_CONTAINER_CLUSTER=$_CLUSTER
@@ -108,7 +108,7 @@ steps:
   - |
     sed -e 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
     -e "s/{{PIPELINE_CRON_SCHEDULE}}/${_PIPELINE_CRON_SCHEDULE}/g" \
-    k8s/data-processing/jobs/stats-pipeline-cronjob.yaml.template > \
+    k8s/$_CLUSTER_NAME/jobs/stats-pipeline-cronjob.yaml.template > \
     stats-pipeline-cronjob.yaml
 
 - name: "gcr.io/cloud-builders/gcloud"
@@ -119,7 +119,7 @@ steps:
   - |
     sed -e 's/{{GCLOUD_PROJECT}}/${PROJECT_ID}/g' \
     -e "s/{{ANNOTATION_EXPORT_CRON_SCHEDULE}}/${_ANNOTATION_EXPORT_CRON_SCHEDULE}/g" \
-    k8s/data-processing/jobs/hopannotation1-export-cronjob.template > \
+    k8s/$_CLUSTER_NAME/jobs/hopannotation1-export-cronjob.template > \
     hopannotation1-export-cronjob.yaml
 
 - name: "gcr.io/cloud-builders/gke-deploy"
