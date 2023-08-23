@@ -72,7 +72,7 @@ spec:
           - -archive_wait_time_expected=10m # (default 1h0m0s)
           - -archive_wait_time_max=15m      # (default 2h0m0s)
           - -sigterm_wait_time=60s
-          - -metadata=MLAB.server.name=data-processing
+          - -metadata=MLAB.server.name=data-pipeline
           - -metadata=MLAB.experiment.name=ndt
           - -metadata=MLAB.pusher.image=measurementlab/pusher:v1.20
           - -metadata=MLAB.pusher.src.url=https://github.com/m-lab/pusher/tree/v1.20
