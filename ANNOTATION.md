@@ -50,7 +50,7 @@ Only the hopannotation1 export process is available on Kubernetes. The export pr
 never run.
 
 To start an annotation export manually, run the following command on the
-`data-processing` cluster:
+`data-pipeline` cluster:
 
 ```sh
 kubectl create job --from=cronjob/hopannotation1-export-cronjob hopannotation1-export-manual

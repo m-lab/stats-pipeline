@@ -27,7 +27,7 @@ services:
     command:
       - -prometheusx.listen-address=:9990
       - -exporter.query-workers=1
-      - -config=/k8s/data-processing/config/config-hopannotation1-export.json
+      - -config=/k8s/data-pipeline/config/config-hopannotation1-export.json
       - -output=local
       - -export=hopannotation1
       - -bucket=/var/spool/ndt/hopannotation1
