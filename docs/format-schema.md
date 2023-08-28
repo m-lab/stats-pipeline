@@ -34,13 +34,9 @@ single day and bucket:
 | "download_AVG":79.745 | The average or mean download speed in megabits per second on this day. |
 | "download_Q75":97.572 | The upper quartile (75th percentile) download speed in megabits per second on this day. |
 | "download_MAX":3655.15 | The maximum download speed in megabits per second on this day. |
-| "download_minRTT_MED":25 | The median Minimum Round Trip Time in milliseconds
-for download measurements on this day. |
-| "ul_LOG_AVG_rnd1":6.589 | The LOG Average of upload measurements in this
-aggregation, using the first randomly selected test per IP address in the set. Value is presented in megabits per second. |
-| "ul_LOG_AVG_rnd2":6.589 | The LOG Average of upload measurements in this
-aggregation, using the second randomly selected test per IP address in the set.
-Value is presented in megabits per second. |
+| "download_minRTT_MED":25 | The median Minimum Round Trip Time in milliseconds for download measurements on this day. |
+| "ul_LOG_AVG_rnd1":6.589 | The LOG Average of upload measurements in this aggregation, using the first randomly selected test per IP address in the set. Value is presented in megabits per second. |
+| "ul_LOG_AVG_rnd2":6.589 | The LOG Average of upload measurements in this aggregation, using the second randomly selected test per IP address in the set. Value is presented in megabits per second. |
 | "ul_minRTT_LOG_AVG_rnd1":24.988 | The LOG Average of Minimum Round Trip Time of upload measurements in this aggregation, using the first randomly selected test per IP address in the set. Value is presented in milliseconds. |
 | "ul_minRTT_LOG_AVG_rnd2":25.003 | The LOG Average of Minimum Round Trip Time of upload measurements in this aggregation, using the second randomly selected test per IP address in the set. Value is presented in milliseconds. |
 | "ul_frac_bucket":0.113 | The fraction of upload measurements within this histogram bucket. |
@@ -52,8 +48,7 @@ Value is presented in megabits per second. |
 | "upload_AVG":28.034 | The average or mean upload speed in megabits per second on this day. |
 | "upload_Q75":17.306 | The upper quartile (75th percentile) upload speed in megabits per second on this day. |
 | "upload_MAX":3199.958 | The maximum upload speed in megabits per second on this day. |
-| "upload_minRTT_MED":23.83 | The median Minimum Round Trip Time in milliseconds
-for upload measurements on this day. |
+| "upload_minRTT_MED":23.83 | The median Minimum Round Trip Time in milliseconds for upload measurements on this day. |
 
 ## Statistics Also Available in BigQuery
 In addition to being available in this JSON API, the same data may be queried in
