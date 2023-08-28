@@ -10,23 +10,14 @@ buckets AS (
 counties AS (
   SELECT
     county_name,
-    county_geom AS WKT,
-    CAST(geo_id AS STRING) AS GEOID
-  FROM
-    `bigquery-public-data.geo_us_boundaries.counties`
-),
---Here we use a copy of the name and geoid of counties, used to select county
--- name in the final results but not the WKT geography
-counties_noWKT AS (
-  SELECT
-    county_name,
     state_fips_code,
     county_fips_code,
     county_gnis_code,
     lsad_name,
     lsad_code,
     fips_class_code,
-    CAST(geo_id AS STRING) AS GEOID
+    CAST(geo_id AS STRING) AS GEOID,
+    county_geom AS WKT
   FROM
     `bigquery-public-data.geo_us_boundaries.counties`
 ),
@@ -40,7 +31,9 @@ dl_per_location AS (
     THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
     ELSE CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
     END AS state,
+    counties.county_name AS CountyName,
     counties.GEOID AS GEOID,
+    counties.county_fips_code AS FIPS,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
     a.MeanThroughputMbps AS mbps,
@@ -72,11 +65,13 @@ dl_fingerprinted AS (
     continent_code,
     country_code,
     state,
+    CountyName,
     GEOID,
+    FIPS,
     ip,
     ARRAY_AGG(STRUCT(ABS(FARM_FINGERPRINT(id)) AS ffid, mbps, MinRTT) ORDER BY ABS(FARM_FINGERPRINT(id))) AS members
   FROM dl_per_location_cleaned
-  GROUP BY date, continent_code, country_code, state, GEOID, ip
+  GROUP BY date, continent_code, country_code, state, CountyName, GEOID, FIPS, ip
 ),
 --Select two random rows for each IP using a prime number larger than the 
 --  total number of tests. random1 is used for per day/geo statistics in 
@@ -87,7 +82,9 @@ dl_random_ip_rows_perday AS (
     continent_code,
     country_code,
     state,
+    CountyName,
     GEOID,
+    FIPS,
     ip,
     ARRAY_LENGTH(members) AS tests,
     members[SAFE_OFFSET(MOD(511232941,ARRAY_LENGTH(members)))] AS random1,
@@ -97,21 +94,24 @@ dl_random_ip_rows_perday AS (
 --Calculate log averages and statistics per day from random samples
 dl_stats_per_day AS (
   SELECT
-    date, continent_code, country_code, state, GEOID,
+    date, continent_code, country_code, state, CountyName, GEOID, FIPS,
     COUNT(*) AS dl_samples_day,
     ROUND(POW(10,AVG(Safe.LOG10(random1.mbps))),3) AS dl_LOG_AVG_rnd1,
     ROUND(POW(10,AVG(Safe.LOG10(random2.mbps))),3) AS dl_LOG_AVG_rnd2,
     ROUND(POW(10,AVG(Safe.LOG10(random1.MinRtt))),3) AS dl_minRTT_LOG_AVG_rnd1,
     ROUND(POW(10,AVG(Safe.LOG10(random2.MinRtt))),3) AS dl_minRTT_LOG_AVG_rnd2,
     ROUND(MIN(random1.mbps),3) AS download_MIN,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(10)],3) AS upload_Q10,
     ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(25)],3) AS download_Q25,
     ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(50)],3) AS download_MED,
     ROUND(AVG(random1.mbps),3) AS download_AVG,
     ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(75)],3) AS download_Q75,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(90)],3) AS upload_Q90,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(95)],3) AS upload_Q95,
     ROUND(MAX(random1.mbps),3) AS download_MAX,
     ROUND(APPROX_QUANTILES(random1.MinRTT, 100) [SAFE_ORDINAL(50)],3) AS download_minRTT_MED,
   FROM dl_random_ip_rows_perday
-  GROUP BY date, continent_code, country_code, state, GEOID
+  GROUP BY date, continent_code, country_code, state, CountyName, GEOID, FIPS
 ),
 --Count the samples that fall into each bucket and get frequencies
 dl_histogram AS (
@@ -120,7 +120,9 @@ dl_histogram AS (
     continent_code,
     country_code,
     state,
+    CountyName,
     GEOID,
+    FIPS,
     --Set the lowest bucket's min to zero, so all tests below the generated min of the lowest bin are included. 
     CASE WHEN bucket_left = 0.5623413251903491 THEN 0
     ELSE bucket_left END AS bucket_min,
@@ -133,7 +135,9 @@ dl_histogram AS (
     continent_code,
     country_code,
     state,
+    CountyName,
     GEOID,
+    FIPS,
     bucket_min,
     bucket_max
 ),
@@ -148,7 +152,9 @@ ul_per_location AS (
     THEN CONCAT(client.Geo.CountryCode,"-",client.Geo.Subdivision1ISOCode)
     ELSE CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
     END AS state,
+    counties.county_name AS CountyName,
     counties.GEOID AS GEOID,
+    counties.county_fips_code AS FIPS,
     NET.SAFE_IP_FROM_STRING(Client.IP) AS ip,
     id,
     a.MeanThroughputMbps AS mbps,
@@ -179,11 +185,13 @@ ul_fingerprinted AS (
     continent_code,
     country_code,
     state,
+    CountyName,
     GEOID,
+    FIPS,
     ip,
     ARRAY_AGG(STRUCT(ABS(FARM_FINGERPRINT(id)) AS ffid, mbps, MinRTT) ORDER BY ABS(FARM_FINGERPRINT(id))) AS members
   FROM ul_per_location_cleaned
-  GROUP BY date, continent_code, country_code, state, GEOID, ip
+  GROUP BY date, continent_code, country_code, state, CountyName, GEOID, FIPS, ip
 ),
 --Select two random rows for each IP using a prime number larger than the 
 --  total number of tests. random1 is used for per day/geo statistics in 
@@ -194,7 +202,9 @@ ul_random_ip_rows_perday AS (
     continent_code,
     country_code,
     state,
+    CountyName,
     GEOID,
+    FIPS,
     ip,
     ARRAY_LENGTH(members) AS tests,
     members[SAFE_OFFSET(MOD(511232941,ARRAY_LENGTH(members)))] AS random1,
@@ -204,21 +214,24 @@ ul_random_ip_rows_perday AS (
 --Calculate log averages and statistics per day from random samples
 ul_stats_per_day AS (
   SELECT
-    date, continent_code, country_code, state, GEOID,
+    date, continent_code, country_code, state, CountyName, GEOID, FIPS,
     COUNT(*) AS ul_samples_day,
     ROUND(POW(10,AVG(Safe.LOG10(random1.mbps))),3) AS ul_LOG_AVG_rnd1,
     ROUND(POW(10,AVG(Safe.LOG10(random2.mbps))),3) AS ul_LOG_AVG_rnd2,
     ROUND(POW(10,AVG(Safe.LOG10(random1.MinRtt))),3) AS ul_minRTT_LOG_AVG_rnd1,
     ROUND(POW(10,AVG(Safe.LOG10(random2.MinRtt))),3) AS ul_minRTT_LOG_AVG_rnd2,
     ROUND(MIN(random1.mbps),3) AS upload_MIN,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(10)],3) AS upload_Q10,
     ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(25)],3) AS upload_Q25,
     ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(50)],3) AS upload_MED,
     ROUND(AVG(random1.mbps),3) AS upload_AVG,
     ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(75)],3) AS upload_Q75,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(90)],3) AS upload_Q90,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(95)],3) AS upload_Q95,
     ROUND(MAX(random1.mbps),3) AS upload_MAX,
     ROUND(APPROX_QUANTILES(random1.MinRTT, 100) [SAFE_ORDINAL(50)],3) AS upload_minRTT_MED,
   FROM ul_random_ip_rows_perday
-  GROUP BY date, continent_code, country_code, state, GEOID
+  GROUP BY date, continent_code, country_code, state, CountyName, GEOID, FIPS
 ),
 --Count the samples that fall into each bucket and get frequencies
 ul_histogram AS (
@@ -227,7 +240,9 @@ ul_histogram AS (
     continent_code,
     country_code,
     state,
+    CountyName,
     GEOID,
+    FIPS,
     --Set the lowest bucket's min to zero, so all tests below the generated min of the lowest bin are included. 
     CASE WHEN bucket_left = 0.5623413251903491 THEN 0
     ELSE bucket_left END AS bucket_min,
@@ -240,17 +255,18 @@ ul_histogram AS (
     continent_code,
     country_code,
     state,
+    CountyName,
     GEOID,
+    FIPS,
     bucket_min,
     bucket_max
 ),
 --Gather final result set
 results AS (
   SELECT *, MOD(ABS(FARM_FINGERPRINT(state)), 4000) as shard FROM dl_histogram
-  JOIN ul_histogram USING (date, continent_code, country_code, state, GEOID, bucket_min, bucket_max)
-  JOIN dl_stats_per_day USING (date, continent_code, country_code, state, GEOID)
-  JOIN ul_stats_per_day USING (date, continent_code, country_code, state, GEOID)
-  JOIN counties_noWKT USING (GEOID)
+  JOIN ul_histogram USING (date, continent_code, country_code, state, CountyName, GEOID, FIPS, bucket_min, bucket_max)
+  JOIN dl_stats_per_day USING (date, continent_code, country_code, state, CountyName, GEOID, FIPS)
+  JOIN ul_stats_per_day USING (date, continent_code, country_code, state, CountyName, GEOID, FIPS)
 )
 --Show the results
 SELECT * FROM results

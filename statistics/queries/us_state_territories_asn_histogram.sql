@@ -30,6 +30,7 @@ dl_per_location AS (
     ELSE CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
     END AS ISO3166_2region1,
     us_states.geo_id AS GEOID,
+    us_states.state_fips_code AS FIPS,
     us_states.state AS state,
     us_states.state_name AS state_name,
     client.Network.ASNumber AS asn,
@@ -67,13 +68,14 @@ dl_fingerprinted AS (
     country_code,
     ISO3166_2region1,
     GEOID,
+    FIPS,
     state,
     state_name,
     asn,
     ip,
     ARRAY_AGG(STRUCT(ABS(FARM_FINGERPRINT(id)) AS ffid, mbps, MinRTT) ORDER BY ABS(FARM_FINGERPRINT(id))) AS members
   FROM dl_per_location_cleaned
-  GROUP BY date, continent_code, country_code, ISO3166_2region1, GEOID, state, state_name, asn, ip
+  GROUP BY date, continent_code, country_code, ISO3166_2region1, GEOID, FIPS, state, state_name, asn, ip
 ),
 --Select two random rows for each IP using a prime number larger than the 
 --  total number of tests. random1 is used for per day/geo statistics in 
@@ -85,6 +87,7 @@ dl_random_ip_rows_perday AS (
     country_code,
     ISO3166_2region1,
     GEOID,
+    FIPS,
     state,
     state_name,
     asn,
@@ -97,21 +100,24 @@ dl_random_ip_rows_perday AS (
 --Calculate log averages and statistics per day from random samples
 dl_stats_per_day AS (
   SELECT
-    date, continent_code, country_code, ISO3166_2region1, GEOID, state, state_name, asn,
+    date, continent_code, country_code, ISO3166_2region1, GEOID, FIPS, state, state_name, asn,
     COUNT(*) AS dl_samples_day,
     ROUND(POW(10,AVG(Safe.LOG10(random1.mbps))),3) AS dl_LOG_AVG_rnd1,
     ROUND(POW(10,AVG(Safe.LOG10(random2.mbps))),3) AS dl_LOG_AVG_rnd2,
     ROUND(POW(10,AVG(Safe.LOG10(random1.MinRtt))),3) AS dl_minRTT_LOG_AVG_rnd1,
     ROUND(POW(10,AVG(Safe.LOG10(random2.MinRtt))),3) AS dl_minRTT_LOG_AVG_rnd2,
     ROUND(MIN(random1.mbps),3) AS download_MIN,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(10)],3) AS download_Q10,
     ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(25)],3) AS download_Q25,
     ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(50)],3) AS download_MED,
     ROUND(AVG(random1.mbps),3) AS download_AVG,
     ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(75)],3) AS download_Q75,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(90)],3) AS download_Q90,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(95)],3) AS download_Q95,
     ROUND(MAX(random1.mbps),3) AS download_MAX,
     ROUND(APPROX_QUANTILES(random1.MinRTT, 100) [SAFE_ORDINAL(50)],3) AS download_minRTT_MED,
   FROM dl_random_ip_rows_perday
-  GROUP BY date, continent_code, country_code, ISO3166_2region1, GEOID, state, state_name, asn
+  GROUP BY date, continent_code, country_code, ISO3166_2region1, GEOID, FIPS, state, state_name, asn
 ),
 --Count the samples that fall into each bucket and get frequencies
 dl_histogram AS (
@@ -121,6 +127,7 @@ dl_histogram AS (
     country_code,
     ISO3166_2region1,
     GEOID,
+    FIPS,
     state,
     state_name,
     asn,
@@ -137,6 +144,7 @@ dl_histogram AS (
     country_code,
     ISO3166_2region1,
     GEOID,
+    FIPS,
     state,
     state_name,
     asn,
@@ -155,6 +163,7 @@ ul_per_location AS (
     ELSE CONCAT(client.Geo.CountryCode,"-",client.Geo.region)
     END AS ISO3166_2region1,
     us_states.geo_id AS GEOID,
+    us_states.state_fips_code AS FIPS,
   	us_states.state AS state,
   	us_states.state_name AS state_name,
     client.Network.ASNumber AS asn,
@@ -192,13 +201,14 @@ ul_fingerprinted AS (
     country_code,
     ISO3166_2region1,
     GEOID,
+    FIPS,
     state,
     state_name,
     asn,
     ip,
     ARRAY_AGG(STRUCT(ABS(FARM_FINGERPRINT(id)) AS ffid, mbps, MinRTT) ORDER BY ABS(FARM_FINGERPRINT(id))) AS members
   FROM ul_per_location_cleaned
-  GROUP BY date, continent_code, country_code, ISO3166_2region1, GEOID, state, state_name, asn, ip
+  GROUP BY date, continent_code, country_code, ISO3166_2region1, GEOID, FIPS, state, state_name, asn, ip
 ),
 --Select two random rows for each IP using a prime number larger than the 
 --  total number of tests. random1 is used for per day/geo statistics in 
@@ -210,6 +220,7 @@ ul_random_ip_rows_perday AS (
     country_code,
     ISO3166_2region1,
     GEOID,
+    FIPS,
     state,
     state_name,
     asn,
@@ -222,21 +233,24 @@ ul_random_ip_rows_perday AS (
 --Calculate log averages and statistics per day from random samples
 ul_stats_per_day AS (
   SELECT
-    date, continent_code, country_code, ISO3166_2region1, GEOID, state, state_name, asn,
+    date, continent_code, country_code, ISO3166_2region1, GEOID, FIPS, state, state_name, asn,
     COUNT(*) AS ul_samples_day,
     ROUND(POW(10,AVG(Safe.LOG10(random1.mbps))),3) AS ul_LOG_AVG_rnd1,
     ROUND(POW(10,AVG(Safe.LOG10(random2.mbps))),3) AS ul_LOG_AVG_rnd2,
     ROUND(POW(10,AVG(Safe.LOG10(random1.MinRtt))),3) AS ul_minRTT_LOG_AVG_rnd1,
     ROUND(POW(10,AVG(Safe.LOG10(random2.MinRtt))),3) AS ul_minRTT_LOG_AVG_rnd2,
     ROUND(MIN(random1.mbps),3) AS upload_MIN,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(10)],3) AS upload_Q10,
     ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(25)],3) AS upload_Q25,
     ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(50)],3) AS upload_MED,
     ROUND(AVG(random1.mbps),3) AS upload_AVG,
     ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(75)],3) AS upload_Q75,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(90)],3) AS upload_Q90,
+    ROUND(APPROX_QUANTILES(random1.mbps, 100) [SAFE_ORDINAL(95)],3) AS upload_Q95,
     ROUND(MAX(random1.mbps),3) AS upload_MAX,
     ROUND(APPROX_QUANTILES(random1.MinRTT, 100) [SAFE_ORDINAL(50)],3) AS upload_minRTT_MED,
   FROM ul_random_ip_rows_perday
-  GROUP BY date, continent_code, country_code, ISO3166_2region1, GEOID, state, state_name, asn
+  GROUP BY date, continent_code, country_code, ISO3166_2region1, GEOID, FIPS, state, state_name, asn
 ),
 --Count the samples that fall into each bucket and get frequencies
 ul_histogram AS (
@@ -246,6 +260,7 @@ ul_histogram AS (
     country_code,
     ISO3166_2region1,
     GEOID,
+    FIPS,
     state,
     state_name,
     asn,
@@ -262,6 +277,7 @@ ul_histogram AS (
     country_code,
     ISO3166_2region1,
     GEOID,
+    FIPS,
     state,
     state_name,
     asn,
@@ -271,9 +287,9 @@ ul_histogram AS (
 --Gather final result set
 results AS (
   SELECT *, MOD(ABS(FARM_FINGERPRINT(GEOID)), 4000) as shard FROM dl_histogram
-  JOIN ul_histogram USING (date, continent_code, country_code, ISO3166_2region1, GEOID, state, state_name, asn, bucket_min, bucket_max)
-  JOIN dl_stats_per_day USING (date, continent_code, country_code, ISO3166_2region1, GEOID, state, state_name, asn )
-  JOIN ul_stats_per_day USING (date, continent_code, country_code, ISO3166_2region1, GEOID, state, state_name, asn )
+  JOIN ul_histogram USING (date, continent_code, country_code, ISO3166_2region1, GEOID, FIPS, state, state_name, asn, bucket_min, bucket_max)
+  JOIN dl_stats_per_day USING (date, continent_code, country_code, ISO3166_2region1, GEOID, FIPS, state, state_name, asn )
+  JOIN ul_stats_per_day USING (date, continent_code, country_code, ISO3166_2region1, GEOID, FIPS, state, state_name, asn )
 )
 --Show the results
 SELECT * FROM results
