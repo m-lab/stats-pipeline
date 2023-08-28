@@ -159,7 +159,7 @@ func (writer *mockWriter) Write(ctx context.Context, path string, content []byte
 }
 
 func TestNew(t *testing.T) {
-	bq, err := bqfake.NewClient(context.Background(), "test")
+	bq, err := bqfake.NewClient(context.Background(), "test", map[string]*bqfake.Dataset{})
 	testingx.Must(t, err, "cannot init bq client")
 	gcs := &gcsfake.GCSClient{}
 	wr := output.NewGCSWriter(uploader.New(gcs, "test-bucket"))
@@ -225,7 +225,7 @@ func Test_printStats(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	bq, err := bqfake.NewClient(context.Background(), "test")
+	bq, err := bqfake.NewClient(context.Background(), "test", map[string]*bqfake.Dataset{})
 	testingx.Must(t, err, "cannot init bq client")
 	gcs := &gcsfake.GCSClient{}
 	wr := output.NewGCSWriter(uploader.New(gcs, "test-bucket"))
