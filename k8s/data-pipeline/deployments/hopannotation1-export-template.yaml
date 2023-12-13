@@ -134,7 +134,7 @@ spec:
         - name: shared-export-dir
           mountPath: /var-spool-ndt
       nodeSelector:
-        stats-pipeline-node: 'true'
+        statistics-node: 'true'
       volumes:
       - name: config-volume
         configMap:
