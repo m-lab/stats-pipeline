@@ -50,7 +50,7 @@ spec:
         - name: config-volume
           mountPath: /etc/stats-pipeline
       nodeSelector:
-        stats-pipeline-node: 'true'
+        statistics-node: 'true'
       volumes:
       - name: config-volume
         configMap:
