@@ -1,3 +1,5 @@
+# NOTE: The stats-pipeline queries always read from the measurement-lab project.
+# This deployment is currently disabled in staging to prevent processing production data multiple times per day.
 steps:
 - name: "gcr.io/cloud-builders/docker"
   id: "Build the docker container"
