@@ -14,7 +14,7 @@
     "d3-collection": "^1.0.7",
     "p-queue": "^6.6.2",
     "sqlite": "^4.0.14",
-    "sqlite3": "5.0.0",
+    "sqlite3": "5.0.11",
     "wget-improved": "^3.2.1"
   }
 }
